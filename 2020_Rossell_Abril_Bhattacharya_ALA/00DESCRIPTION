@@ -1,0 +1,3 @@
+- rcode.R: main file with R code to reproduce the examples
+- routines_AFT.R: auxiliary routines for the accelerated failure time model examples
+- colon_p173.RData: dataset used in colon cancer survival example, containing the expression of 173 genes
