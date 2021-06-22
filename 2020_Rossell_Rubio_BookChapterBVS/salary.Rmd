@@ -1,0 +1,338 @@
+---
+title: "Salary data analysis"
+author: "David Rossell and Francisco Rubio"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+    number_sections: true
+    df_print: paged
+---
+
+
+We load R packages and a file `functions.R` containing auxiliary functions.
+
+```{r,message=FALSE}
+source('functions.R')
+library(mombf)  # BMS
+library(glmnet) # LASSO
+library(selectiveInference)  # LASSO post-selection inference
+library(hdm)
+```
+
+We load the salary data and format marital status, education and US region as factors.
+Marital status categories are widowed, divorced, separated and never married.
+Education categories are high school diploma (hsd), high school graduate (hsg), some college (sc), college graduate (cg) and advanced degree (ad, meaning MSc or PhD).
+Regions are midwest (mw), north east (ne), southern (so) and west (we).
+The response variable is log-hourly wage (lnw), we also have a female indicator and job market experience (years since finishing education).
+For further information type help(cps2012).
+We scale the response and the continuous covariate experience to zero mean, unit variance.
+
+```{r}
+data(cps2012)
+marital= ifelse(cps2012$widowed,'widowed',ifelse(cps2012$divorced,'divorced',ifelse(cps2012$separated,'separated','nevermarried')))
+edu= ifelse(cps2012$hsg,'hsg',ifelse(cps2012$hsd08 | cps2012$hsd911,'hsd', ifelse(cps2012$sc,'sc',ifelse(cps2012$cg,'cg','ad'))))
+region= ifelse(cps2012$mw,'mw',ifelse(cps2012$so,'so',ifelse(cps2012$we,'we','ne')))
+salary= data.frame(lnw=scale(cps2012$lnw), female=cps2012$female, marital, edu, region, exp=scale(cps2012$exp1))
+dim(salary)
+```
+
+The dataset has $n=29,217$ observations and 5 covariates. Considering main effects and pairwise interactions gives 67 parameters. To facilitate typing formulas later on, we store them into `f1` and `f1y`.
+
+```{r}
+f1= ~ female + edu + exp + marital + region + female:edu + female:exp + female:marital + female:region + edu:exp + edu:marital + edu:region + exp:marital + exp:region + marital:region
+f1y= lnw ~ female + edu + exp + marital + region + female:edu + female:exp + female:marital + female:region + edu:exp + edu:marital + edu:region + exp:marital + exp:region + marital:region
+```
+
+
+```{r}
+y= salary$lnw
+X= model.matrix(f1, data=salary)
+dim(X)
+```
+
+Since $n$ is large we can rely on standard least-squares providing fairly accurate estimates, confidence intervals and P-values. However, after fitting the full model it is not fully clear how to proceed to select the final model, e.g. it is common to apply stepwise methods where one drops one term at a time, ensuring that main effects are not discarded before their corresponding interactions, a caveat being that the solution can depend on the chosen strategy and it is not clear how to measure type I error for such multi-step procedures.
+
+We analyze these data first using Bayesian model selection, which facilitates comparing the evidence for all possible models via posterior probabilities. Interestingly, although there are $2^{67}$ ways to select a subset of columns in $X$, due to the group and hierarchical restrictions the number of models is only $|\Gamma|=2,900$, hence one can enumerate all models. BMS assigns overwhelming evidence for one model and posterior inference comfortingly aligns with what one would expect from the least-squares results.
+
+We also illustrate that analyzing data with these structure with penalized likelihood is harder. We focus on LASSO-based methods. Given that standard LASSO does not incorporate neither group nor hierarchical restrictions, we use group LASSO. The point estimates exhibit a non-negligible sensitivity to the regularization parameter. More importantly, we illustrate difficulties in assessing their statistical significance with two popular methods: LASSO post-selection inference (Lee et al, 2016, AOS) fails to converge for these data, whereas Stability selection is extremely conservative by reporting a single statistically-significant coefficient, in a setting where many least-squares P-values are highly-significant ($<0.0001$).
+
+Note also that currently these methods do not allow incorporating group penalties, i.e. one cannot easily test significance of group LASSO estimates. Further, group LASSO does not impose the hierarchical constraint that one should not add an interaction term unless the corresponding main effects are also present. It is possible to incorporate such constraints via hierarchical LASSO (Bien et al, 2013, AOS), besides issues with assessing significance as we illustrate below its computational cost is prohibitive. 
+
+
+# BAYESIAN MODEL SELECTION
+
+We run Bayesian model selection under the block Zellner's prior (the dispersion is parameterized as tau=$n g_N$, hence the default $g_N=1$ corresponds to tau=$n$) and a Beta-Binomial(1,1) prior on the models. We use option enumerate=TRUE to force full model enumeration (alternatively it uses Gibbs sampling, the obtained results are very similar either way). The task finishes quickly, in less than 1 second.
+
+```{r}
+priorCoef= zellnerprior(tau=nrow(salary))
+priorGroup= zellnerprior(tau=nrow(salary))
+priorDelta= modelbbprior(1,1)
+system.time(ms <- modelSelection(f1y,data=salary,priorCoef=priorCoef,priorGroup=priorGroup,priorDelta=priorDelta,enumerate=TRUE))
+```
+
+The top model has 18 coefficients, and its posterior probability is $>0.95$. This is as predicted by theory, when $n$ is large posterior probabilities should concentrate on the optimal model. The model identifier indicates what columns in $X$ are selected.
+
+```{r}
+pp= postProb(ms)
+head(pp)
+```
+
+Interpretation is easier by extracting Bayesian model averaging estimates for each coefficient, along with posterior intervals and marginal inclusion probabilities. Grouped coefficients all receive the same posterior inclusion probability.
+All main effects and interactions gender:experience and education:experience are included, all other interactions are discarded. The last row provides inference for the residual variance $\phi$.
+
+```{r}
+b= coef(ms)
+round(b,4)
+```
+
+# ROBUSTNESS TO PRIOR DISPERSION
+
+We check how the posterior probability of the top two models changes under rather extreme changes of the prior dispersion parameter $g_N$. We retrieve the indexes of the coefficient indexes selected by both models and the corresponding covariate names. The second top model selects the same set of covariates, but also adds the interaction female:marital status.
+
+```{r}
+topmodel= as.character(pp[1,]$modelid)
+top2model= as.character(pp[2,]$modelid)
+c(topmodel, top2model)
+```
+
+```{r}
+vnames= colnames(ms$xstd)
+paste(vnames[c(1,2,3,4,5,6,7,8,9,10,11,12,13,18,25,26,27,28)],collapse=',')
+paste(vnames[c(1,2,3,4,5,6,7,8,9,10,11,12,13,18,19,20,21,25,26,27,28)],collapse=',')
+```
+
+We run BMS for a sequence $g_N$=0.1,...,10 (corresponding to tau=0.1n,...,10n), and store the posterior probability of the two models described above.
+
+```{r}
+tauseq= exp(seq(log(nrow(salary)/10), log(nrow(salary)*10), length=20))
+ppseq= msseq= vector("list",length(tauseq))
+pptopseq= pptop2seq= double(length(tauseq))
+for (i in 1:length(tauseq)) {
+  priorCoef= zellnerprior(tau=tauseq[i])
+  priorGroup= zellnerprior(tau=tauseq[i])
+  msseq[[i]]= modelSelection(f1y,data=salary,priorCoef=priorCoef,priorGroup=priorGroup,priorDelta=priorDelta,enumerate=TRUE,verbose=FALSE)
+  ppseq[[i]]= postProb(msseq[[i]])
+  pptopseq[i]= ppseq[[i]][ppseq[[i]]$modelid == topmodel,'pp']
+  pptop2seq[i]= ppseq[[i]][ppseq[[i]]$modelid == top2model,'pp']
+}
+```
+
+Plotting their posterior probabilities versus $g_N$ reveals that results are remarkably stable. For a wide range of $g_N$ the top model remains unaffected and receives high posterior probability, for small $g_N$ then the second top model receives higher posterior probability. That is, these two models  combined receive a posterior probability near 1, for any $g_N$ within this range, and they select a very similar set of variables.
+
+```{r}
+plot(tauseq/nrow(salary), pptopseq, type='l', log='x', xlab=expression(g[N]), ylim=c(0,1), ylab='Posterior probability')
+lines(tauseq/nrow(salary), pptop2seq, col='darkgray', lwd=2, lty=2)
+```
+
+Finally, a difference between BMS and penalized likelihood is that for the former prior parameters are not merely tuning parameters, instead they can be interpreted in terms of prior beliefs. Specifically $g_N$ determines the percentage of variance in the outcome that is explained by the covariates, the $R^2$ coefficient. 
+
+$$
+R^2= \frac{\beta^T X^T X \beta / n}{\phi + \beta^T X^T X \beta / n}=
+\left(1 + \frac{\phi n}{\beta^T X^T X \beta} \right)^{-1}
+$$
+where $\phi$ is the error variance. The goal is to assess the prior expected value of $R^2$ as a function of $g_N$, to assess whether any given $g_N$ expresses tenable prior beliefs.
+
+The prior covariance of $\beta$ is given by a matrix $V$ defined by blocks within the $X^T X$ matrix (blocks are defined by coefficient groups associated to discrete covariates and interaction terms), times a factor  $\phi n g_N$. We use the design matrix and group identifiers returned by modelSelection to compute $V$.
+
+```{r}
+V= matrix(0, nrow=ncol(ms$xstd), ncol=ncol(ms$xstd))
+groupid= unique(ms$groups)
+for (i in 1:length(groupid)) {
+  sel= (ms$groups == groupid[i])
+  V[sel,sel]= t(ms$xstd[,sel]) %*% ms$xstd[,sel]
+}
+V= solve(V)
+```
+
+We first simulate $\beta/\sqrt{\phi} \sim N(0, n V)$ (the $g_N=1$ case) and obtain the corresponding prior draws for $(\beta^T X^T X \beta/n) / \phi$, the sum of squares explained by $X$ relative to $\phi$ (SSE). Prior draws for other $g_N$ are easily obtained by multiplying SSE by $g_N$ (equivalently, simulating from $\beta/\sqrt{\phi} \sim N(0, g_N n V)$).
+
+```{r}
+beta= rmvnorm(1000, sigma= nrow(salary) * V)
+sse= rowSums((ms$xstd %*% t(beta))^2)/nrow(salary)
+
+gseq= tauseq/nrow(salary)
+r2= double(length(tauseq))
+for (i in 1:length(tauseq)) { r2[i]= mean(sse * gseq[i] / (1 + sse * gseq[i])) }
+```
+
+The figure below shows that the considered range for $g_N$ is pretty comprehensive, ranging from situations where $R^2$ is expected to be below 15% to situations where it's expected to be above 90%. The default $g_N=1$ roughly corresponds to $E(R^2)=0.5$, or equivalently that the sum of squares explained by $X$ is of the same magnitude as the error variance.
+
+```{r}
+plot(gseq, r2, type='l', xlab=expression(g[N]), ylab='Prior expected R2', ylim=c(0,1))
+```
+
+
+
+# ROBUSTNESS TO SAMPLE SIZE
+
+We check how results change if one had only access to a smaller sample size. We select randomly 10% of the observations, giving a new sample size of $n=2,922$. In the smaller sample there are no individuals in the combination (high school education, widowed), since this effect is non-estimable we drop it from the model.
+
+posterior probability of the top two models changes under rather extreme changes of the prior dispersion parameter $g_N$. We retrieve the indexes of the coefficient indexes selected by both models and the corresponding covariate names. The second top model selects the same set of covariates, but also adds the interaction female:marital status.
+
+```{r}
+set.seed(1234)
+sel= sample(1:nrow(salary), size= round(nrow(salary)/10), replace=FALSE)
+salarysel= salary[sel,]
+priorCoef= zellnerprior(tau=nrow(salarysel))
+priorGroup= zellnerprior(tau=nrow(salarysel))
+priorDelta= modelbbprior(1,1)
+f2y= as.formula("lnw ~ female + edu + exp + marital + region + female:edu + female:exp + female:marital + female:region + edu:exp + edu:region + exp:marital + exp:region + marital:region")
+mssel= modelSelection(f2y,data=salarysel,priorCoef=priorCoef,priorGroup=priorGroup,priorDelta=priorDelta,enumerate=TRUE,verbose=FALSE)
+ppsel= postProb(mssel)
+head(ppsel)
+```
+
+The top model (0.880 posterior probability) now includes main effects for gender, education and experience. The second top model (0.108 posterior probability) adds region. The fact that we now select less variables is not surprising, the statistical power to detect interactions is often low unless n is large enough, for instance similar results are observed when applying least-squares.
+
+```{r}
+topmodel= as.character(ppsel[1,]$modelid)
+top2model= as.character(ppsel[2,]$modelid)
+c(topmodel, top2model)
+```
+
+```{r}
+vnames= colnames(mssel$xstd)
+paste(vnames[c(1,2,3,4,5,6,7)],collapse=',')
+paste(vnames[c(1,2,3,4,5,6,7,11,12,13)],collapse=',')
+```
+
+We run BMS for a sequence $g_N$=0.1,...,10 (corresponding to tau=0.1n,...,10n), and store the posterior probability of the top two models above.
+
+```{r}
+tauseqsel= exp(seq(log(nrow(salarysel)/10), log(nrow(salarysel)*10), length=20))
+ppseqsel= msseqsel= vector("list",length(tauseqsel))
+pptopseqsel= pptop2seqsel= double(length(tauseqsel))
+for (i in 1:length(tauseqsel)) {
+  priorCoef= zellnerprior(tau=tauseqsel[i])
+  priorGroup= zellnerprior(tau=tauseqsel[i])
+  msseqsel[[i]]= modelSelection(f2y,data=salarysel,priorCoef=priorCoef,priorGroup=priorGroup,priorDelta=priorDelta,enumerate=TRUE,verbose=FALSE)
+  ppseqsel[[i]]= postProb(msseqsel[[i]])
+  pptopseqsel[i]= ppseqsel[[i]][ppseqsel[[i]]$modelid == topmodel,'pp']
+  pptop2seqsel[i]= ppseqsel[[i]][ppseqsel[[i]]$modelid == top2model,'pp']
+}
+```
+
+Posterior probabilities versus $g_N$ are fairly stable. For a wide range of $g_N$ the top model for either sample size remains unaffected and receives high posterior probability, for small $g_N$ then the second top model receives higher posterior probability. The top two models combined receive a posterior probability near 1, for any $g_N$ within this range, and they select a very similar set of variables. The effect of the sample size, however, is more marked, mainly in reducing the power to detect truly active covariates (as suggested by the analysis under the larger $n$).
+
+```{r}
+plot(tauseq/nrow(salary), pptopseq, type='l', log='x', xlab=expression(g[N]), ylim=c(0,1), ylab='Posterior probability')
+text(1, pptopseq[10], "Top model (n=29217)",pos=3)
+lines(tauseq/nrow(salary), pptop2seq, lwd=2, lty=2)
+text(1, pptop2seq[10], "2nd model (n=29217)",pos=3)
+lines(tauseqsel/nrow(salarysel), pptopseqsel, col='darkgray')
+text(1, pptopseqsel[10], "Top model (n=2922)",pos=3)
+lines(tauseqsel/nrow(salarysel), pptop2seqsel, lwd=2, lty=2, col='darkgray')
+text(1, pptop2seqsel[10], "2nd model (n=2922)",pos=3)
+```
+
+
+# COMPARISON TO LEAST-SQUARES
+
+For comparison least-squares also suggests that all main effects are significant (not shown) and that the interactions gender:experience and education:experience are those with highest statistical significance. Relative to BMS, the least-squares P-values are more liberal by also suggesting interactions gender:marital status, gender:education,  and education:region (P-values 0.000002, 0.004722, 0.021007). This is not surprise, it is common that Bayesian tests tend to be more conservative than P-values.
+
+```{r}
+ols= lm(f1y, data=salary)
+bols= coef(ols)
+```
+
+```{r}
+main= "lnw ~ female + edu + exp + marital + region +"
+int= c("female:edu","female:exp","female:marital","female:region","edu:exp","edu:marital","edu:region","exp:marital","exp:region","marital:region")
+pval= double(length(int)); names(pval)= int
+for (i in 1:length(pval)) {
+  fdrop= paste(main, paste(int[-i],collapse="+"))
+  olsdrop= lm(fdrop, data=salary)
+  pval[i]= anova(ols, olsdrop)[2,"Pr(>F)"]
+}
+round(pval,6)
+```
+
+Finally we assess the shrinkage in the BMA estimates relative to least-squares, and compare the predicted outcomes. From an estimation/prediction point of view, both solutions are similar, although note that BMS shrank some of the parameters to 0.
+
+```{r}
+plot(bols, b[-nrow(b),1]); abline(0,1)
+```
+
+```{r}
+ypred= predict(ms)
+cor(predict(ols), ypred[,1])
+```
+
+
+
+## GROUP LASSO
+
+We obtain parameter estimates using group LASSO. We set the regularization parameter $\lambda$ via cross-validation, using a wrapper to function grplasso available at https://github.com/SoyeonKimStat/Grouplasso, which for convenience we added to the file functions.R loaded at the start of the session. Two popular strategies are setting $\lambda$ to either the value minimizing cross-validated mean squared prediction error, or to take that value plus one standard error (estimated from the variance in $\hat{\lambda}$ across cross-validation folds). The output below reveals that the recovered model is affected significantly depending on which of these two values are used: selecting 10 parameters versus including all 67 in the model.
+
+```{r,message=FALSE}
+library(gglasso)
+y= salary$lnw
+X= model.matrix(f1, data=salary)
+groups= attr(X, "assign")
+cvg= cv.grplasso(x=X, y=y, index=groups)
+```
+
+```{r}
+c(cvg$lambda.1se,cvg$lambda.min)
+b.glasso= coef(cvg$grplasso.fit)
+b.glasso
+```
+
+```{r}
+colSums(b.glasso != 0)
+```
+
+
+
+## LASSO + post-selection inference (Lee et al, 2016, AOS)
+
+To analyze the data with LASSO + post-selection inference, the first step is to format the data in the way required by `fixedLassoInf` using function `model.matrix`, and centering and scaling the outcome and covariates to zero mean, unit variance.
+
+```{r}
+y= scale(salary$lnw)
+X= scale(model.matrix(f1, data=salary)[,-1])
+```
+
+Next, we obtain LASSO estimates setting the regularization parameter via 10-fold cross-validation.
+
+```{r}
+sigmahat= estimateSigma(x=X, y=y, standardize=FALSE)$sigmahat
+cvfit= cv.glmnet(x=X, y=y, nfolds=10)
+gfit= glmnet(x=X, y=y, standardize=FALSE, lambda=cvfit$lambda.min)
+blasso= coef(gfit)[-1]
+```
+
+Finally we use function fixedLassoInf (note: since it takes >10 minutes to run, the code is not evaluated below).
+
+
+```{r,eval=FALSE}
+lcv= fixedLassoInf(x=xstd,y=ystd,beta=b,lambda=cvfit$lambda.min*nrow(x),sigma=sigmahat,verbose=verbose)
+
+sel.lasso= (b!=0)
+ci.lassopost= matrix(0,nrow=length(b),ncol=4)
+colnames(ci.lassopost)= c('estimate','ci.low','ci.up','pvalue'); rownames(ci.lassopost)= colnames(xstd)
+ci.lassopost[b != 0,]= cbind(lcv$coef0, lcv$ci, lcv$pv)
+ci.lassopost[b == 0,4]= NA
+ci.lassopost
+```
+
+
+
+## Stability selection (Meinshausen and Buhlman, 2010, JRSS-B)
+
+We run stability selection with a per-family error rate of 0.05, and two cutoff values in the recommended (0.6,0.9) range. In both cases only one coefficient is selected, corresponding to the main effect of high school-level education. 
+
+```{r}
+library(stabs)
+fit.stab= stabsel(x=X, y=y, fitfun=lars.lasso, cutoff=0.9, PFER=0.05, sampling.type='SS')
+fit.stab
+```
+
+```{r}
+fit.stab2= stabsel(x=X, y=y, fitfun=lars.lasso, cutoff=0.6, PFER=0.05, sampling.type='SS')
+fit.stab2
+```
+
+
+
