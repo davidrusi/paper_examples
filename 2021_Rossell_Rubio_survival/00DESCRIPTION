@@ -1,0 +1,5 @@
+This directory contains R code to reproduce the examples in Rossell D, Rubio FJ. Additive Bayesian variable selection under censoring and  misspecification (2019). arxiv 1907.13563
+
+- colon_cancer.R: F-TBRS colon cancer data analysis
+- routines.R: auxiliary routines needed by colon_cancer.R
+- ftbrs_survdata.txt: F-TBRS dataset
