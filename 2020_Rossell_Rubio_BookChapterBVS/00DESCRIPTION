@@ -1,0 +1,4 @@
+This directory contains R notebooks to reproduce the results from the book chapter by Rossell & Rubio in the Handbook of Bayesian variable selection
+
+- salary.Rmd: USA census salary data example
+- flchain.Rmd: FLchain survival regression example
