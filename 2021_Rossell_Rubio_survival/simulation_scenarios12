@@ -1,0 +1,1270 @@
+#####################################################################################################################
+##
+## R CODE TO REPRODUCE RESULTS FROM SIMULATION SCENARIOS 1-2
+##
+#####################################################################################################################
+
+
+library(mombf)
+library(mvtnorm)
+library(survival)
+library(AdapEnetClass)
+library(BVSNLP)
+library(xtable)
+source('~/Dropbox/projects/fxrubio/DavidJavier/BVSC/R Codes/routines.R')
+
+
+#Plot simulation truth and a simulated dataset under Scenario 1
+beta= c(1/3,1/2); sigmae = 0.5; corr=0.5; n=100; censtimes1=.5; censtimes2= 1
+data1= simDataScen1(seed=1,beta=beta,n=n,sigmae=sigmae,corr=corr,censtimes=censtimes1)
+y= data1$y; yuncens=data1$yuncens; X= data1$X
+
+par(mar=c(4.5,4.5,.1,.1))
+pch= ifelse(y[,2]==1,1,16); col= ifelse(y[,2]==1,'black','gray')
+plot(X[,2], yuncens[,1] - X[,1], pch=pch, col=col, xlab=expression(x[2]), ylab=expression(y - x[1]), cex.lab=1.5)
+o= order(X[,2]); lines(X[o,2], log(abs(X[o,2]))*beta[2])
+legend('bottomright',c('Observed','Censored'),pch=c(1,16),col=c('black','gray'),cex=1.5)
+
+
+#Plot simulation truth and a simulated dataset under Scenario 2
+data2= simDataScen2(seed=1,beta=beta,n=n,sigmae=sigmae,corr=corr,censtimes=censtimes2)
+y= data2$y; yuncens=data2$yuncens; X= data2$X
+
+par(mar=c(4.5,4.5,.1,.1))
+pch= ifelse(y[,2]==1,1,16); col= ifelse(y[,2]==1,'black','gray')
+plot(X[,2], yuncens[,1] - X[,1], pch=pch, col=col, xlab=expression(x[2]), ylab=expression(y - x[1]), cex.lab=1.5)
+o= order(X[,2]); lines(X[o,2], log(1+abs(X[o,2]))*beta[2])
+legend('bottomright',c('Observed','Censored'),pch=c(1,16),col=c('black','gray'),cex=1.5)
+
+
+####################################################################################################
+## SIMULATION SCENARIOS 1-2. p=2. EFFECT OF SPLINE BASIS DIMENSION r ON INCLUSION OF X2 (MOM + group Zellner prior)
+####################################################################################################
+
+beta= c(1/3,1/2); sigmae = 0.5; corr=0.5; censtimes1=.5; censtimes2= 1
+nseq= c(50,100,200,500); nsim= 250
+
+#Learn basis dimension r in (5,10,15) (knots in (9,14,19))
+margpp1= margpp2= matrix(NA,nrow=length(nseq),ncol=3)
+colnames(margpp1)= colnames(margpp2)= c("n","X1","X2")
+for (j in 1:length(nseq)) {
+    cat("\n n=",nseq[j],"\n")
+    simout1= mclapply(1:nsim, function(i) simScenario(i,beta=beta,n=nseq[j],sigmae=sigmae,corr=corr,censtimes=censtimes1,scenario=1,nknots=c(9,14,19)),mc.preschedule=FALSE,mc.cores=4)
+    simout2= mclapply(1:nsim, function(i) simScenario(i,beta=beta,n=nseq[j],sigmae=sigmae,corr=corr,censtimes=censtimes2,scenario=2,nknots=c(9,14,19)),mc.preschedule=FALSE,mc.cores=4)
+    margpp1[j,]= c(nseq[j], margpp(simout1)['Linear and non-linear',c("X1, censored","X2, censored")]) 
+    margpp2[j,]= c(nseq[j], margpp(simout2)['Linear and non-linear',c("X1, censored","X2, censored")])
+}
+
+
+#Basis dimension r=5 (knots=9)
+margpp1.r5= margpp2.r5= matrix(NA,nrow=length(nseq),ncol=3)
+colnames(margpp1.r5)= colnames(margpp2.r5)= c("n","X1","X2")
+for (j in 1:length(nseq)) {
+    cat("\n n=",nseq[j],"\n")
+    simout1= mclapply(1:nsim, function(i) simScenario(i,beta=beta,n=nseq[j],sigmae=sigmae,corr=corr,censtimes=censtimes1,scenario=1,nknots=9),mc.preschedule=FALSE,mc.cores=4)
+    simout2= mclapply(1:nsim, function(i) simScenario(i,beta=beta,n=nseq[j],sigmae=sigmae,corr=corr,censtimes=censtimes2,scenario=2,nknots=9),mc.preschedule=FALSE,mc.cores=4)
+    margpp1.r5[j,]= c(nseq[j], margpp(simout1)['Linear and non-linear',c("X1, censored","X2, censored")]) 
+    margpp2.r5[j,]= c(nseq[j], margpp(simout2)['Linear and non-linear',c("X1, censored","X2, censored")])
+}
+
+
+#Basis dimension r=10 (knots=14)
+margpp1.r10= margpp2.r10= matrix(NA,nrow=length(nseq),ncol=3)
+colnames(margpp1.r10)= colnames(margpp2.r10)= c("n","X1","X2")
+for (j in 1:length(nseq)) {
+    cat("\n n=",nseq[j],"\n")
+    simout1= mclapply(1:nsim, function(i) simScenario(i,beta=beta,n=nseq[j],sigmae=sigmae,corr=corr,censtimes=censtimes1,scenario=1,nknots=14),mc.preschedule=FALSE,mc.cores=4)
+    simout2= mclapply(1:nsim, function(i) simScenario(i,beta=beta,n=nseq[j],sigmae=sigmae,corr=corr,censtimes=censtimes2,scenario=2,nknots=14),mc.preschedule=FALSE,mc.cores=4)
+    margpp1.r10[j,]= c(nseq[j], margpp(simout1)['Linear and non-linear',c("X1, censored","X2, censored")]) 
+    margpp2.r10[j,]= c(nseq[j], margpp(simout2)['Linear and non-linear',c("X1, censored","X2, censored")])
+}
+
+
+#Basis dimension r=15 (knots=19)
+margpp1.r15= margpp2.r15= matrix(NA,nrow=length(nseq),ncol=3)
+colnames(margpp1.r15)= colnames(margpp2.r15)= c("n","X1","X2")
+for (j in 1:length(nseq)) {
+    cat("\n n=",nseq[j],"\n")
+    simout1= mclapply(1:nsim, function(i) simScenario(i,beta=beta,n=nseq[j],sigmae=sigmae,corr=corr,censtimes=censtimes1,scenario=1,nknots=19),mc.preschedule=FALSE,mc.cores=4)
+    simout2= mclapply(1:nsim, function(i) simScenario(i,beta=beta,n=nseq[j],sigmae=sigmae,corr=corr,censtimes=censtimes2,scenario=2,nknots=19),mc.preschedule=FALSE,mc.cores=4)
+    margpp1.r15[j,]= c(nseq[j], margpp(simout1)['Linear and non-linear',c("X1, censored","X2, censored")]) 
+    margpp2.r15[j,]= c(nseq[j], margpp(simout2)['Linear and non-linear',c("X1, censored","X2, censored")])
+}
+
+
+#Posterior marginal inclusion prob of X2, Scenario 1
+par(mar=c(4,4.5,.1,.1))
+ylim= c(.6,1); lty= c(1,2,3,1); lwd= c(1,2,3,1); col= c('gray','gray','gray','black')
+plot(margpp1.r5[,'n'], margpp1.r5[,'X2'], type='l', xlab='n', ylab='Marginal posterior inclusion probability (X2)', xlim=c(0,500), ylim=ylim, cex.lab=1.3, cex.axis=1.3, lty=lty[1], lwd=lwd[1], col=col[1], xaxt='n')
+axis(1,at=margpp1.r5[,'n'], labels=margpp1.r5[,'n'], cex.axis=1.3)
+text(50, margpp1.r5[1,'X2'], 'r=5', cex=1.5, pos=2)
+lines(margpp1.r10[,'n'], margpp1.r10[,'X2'], lty=lty[2], lwd=lwd[2], col=col[2])
+text(50, margpp1.r10[1,'X2'], 'r=10', cex=1.5, pos=2)
+lines(margpp1.r15[,'n'], margpp1.r15[,'X2'], lty=lty[3], lwd=lwd[3], col=col[3])
+text(50, margpp1.r15[1,'X2'], 'r=15', cex=1.5, pos=2)
+lines(margpp1[,'n'], margpp1[,'X2'], lty=lty[4], lwd=lwd[4], col=col[4])
+text(15, margpp1[1,'X2'], 'Learn r', cex=1.5)
+
+#Posterior marginal inclusion prob of X2, Scenario 2
+par(mar=c(4,4.5,.1,.1))
+ylim= c(.6,1); lty= c(1,2,3,1); lwd= c(1,2,3,1); col= c('gray','gray','gray','black')
+plot(margpp2.r5[,'n'], margpp2.r5[,'X2'], type='l', xlab='n', ylab='Marginal posterior inclusion probability (X2)', xlim=c(0,500), ylim=ylim, cex.lab=1.3, cex.axis=1.3, lty=lty[1], lwd=lwd[1], col=col[1], xaxt='n')
+axis(1,at=margpp2.r5[,'n'], labels=margpp2.r5[,'n'], cex.axis=1.3)
+text(50, margpp2.r5[1,'X2'] + .01, 'r=5', cex=1.5, pos=2)
+lines(margpp2.r10[,'n'], margpp2.r10[,'X2'], lty=lty[2], lwd=lwd[2], col=col[2])
+text(50, margpp2.r10[1,'X2'], 'r=10', cex=1.5, pos=2)
+lines(margpp2.r15[,'n'], margpp2.r15[,'X2'], lty=lty[3], lwd=lwd[3], col=col[3])
+text(50, margpp2.r15[1,'X2'] - .01, 'r=15', cex=1.5, pos=2)
+lines(margpp2[,'n'], margpp2[,'X2'], lty=lty[4], lwd=lwd[4], col=col[4])
+text(15, margpp2[1,'X2'] - 0.014, 'Learn r', cex=1.5)
+
+
+#COMPUTATIONAL TIME
+t1= double(4); names(t1)= c('r=5','r=10','r=15','Learn r')
+t1[1] <- system.time(simout1 <- lapply(1:100, function(i) simScenario(i,beta=beta,n=500,sigmae=sigmae,corr=corr,censtimes=censtimes1,scenario=1,nknots=9)))['elapsed']
+t1[2] <- system.time(simout1 <- lapply(1:100, function(i) simScenario(i,beta=beta,n=500,sigmae=sigmae,corr=corr,censtimes=censtimes1,scenario=1,nknots=14)))['elapsed']
+t1[3] <- system.time(simout1 <- lapply(1:100, function(i) simScenario(i,beta=beta,n=500,sigmae=sigmae,corr=corr,censtimes=censtimes1,scenario=1,nknots=19)))['elapsed']
+t1[4] <- system.time(simout1 <- lapply(1:100, function(i) simScenario(i,beta=beta,n=500,sigmae=sigmae,corr=corr,censtimes=censtimes1,scenario=1,nknots=c(9,14,19))))['elapsed']
+
+t2= double(4); names(t1)= c('r=5','r=10','r=15','Learn r')
+t2[1] <- system.time(simout1 <- lapply(1:100, function(i) simScenario(i,beta=beta,n=500,sigmae=sigmae,corr=corr,censtimes=censtimes2,scenario=2,nknots=9)))['elapsed']
+t2[2] <- system.time(simout1 <- lapply(1:100, function(i) simScenario(i,beta=beta,n=500,sigmae=sigmae,corr=corr,censtimes=censtimes2,scenario=2,nknots=14)))['elapsed']
+t2[3] <- system.time(simout1 <- lapply(1:100, function(i) simScenario(i,beta=beta,n=500,sigmae=sigmae,corr=corr,censtimes=censtimes2,scenario=2,nknots=19)))['elapsed']
+t2[4] <- system.time(simout1 <- lapply(1:100, function(i) simScenario(i,beta=beta,n=500,sigmae=sigmae,corr=corr,censtimes=censtimes2,scenario=2,nknots=c(9,14,19))))['elapsed']
+
+cbind(t1,t2)/100
+#OUTPUT FROM R
+#           t1    t2
+#r=5      0.04  0.04
+#r=10     0.11  0.09
+#r=15     0.25  0.22
+#Learn r  0.85  0.64
+
+
+####################################################################################################
+## SIMULATION SCENARIOS 1-2. p=2. LEARNING r in (5,10,15) (MOM + group Zellner prior)
+####################################################################################################
+
+beta= c(1/3,1/2); sigmae = 0.5; corr=0.5; censtimes1=.5; censtimes2= 1
+
+#n=50
+simout1= mclapply(1:250, function(i) simScenario(i,beta=beta,n=50,sigmae=sigmae,corr=corr,censtimes=censtimes1,scenario=1,nknots=c(9,14,19)),mc.preschedule=FALSE,mc.cores=4)
+simout2= mclapply(1:250, function(i) simScenario(i,beta=beta,n=50,sigmae=sigmae,corr=corr,censtimes=censtimes2,scenario=2,nknots=c(9,14,19)),mc.preschedule=FALSE,mc.cores=4)
+meansim1= averageSims(simout1)
+meansim2= averageSims(simout2)
+margpp1= margpp(simout1)
+margpp2= margpp(simout2)
+save(meansim1, meansim2, margpp1, margpp2, file='sim_scen12_n50_learnr.RData')
+
+#n=100
+simout1= mclapply(1:250, function(i) simScenario(i,beta=beta,n=100,sigmae=sigmae,corr=corr,censtimes=censtimes1,scenario=1,nknots=c(9,14,19)),mc.preschedule=FALSE,mc.cores=4)
+simout2= mclapply(1:250, function(i) simScenario(i,beta=beta,n=100,sigmae=sigmae,corr=corr,censtimes=censtimes2,scenario=2,nknots=c(9,14,19)),mc.preschedule=FALSE,mc.cores=4)
+meansim1= averageSims(simout1)
+meansim2= averageSims(simout2)
+margpp1= margpp(simout1)
+margpp2= margpp(simout2)
+save(meansim1, meansim2, margpp1, margpp2, file='sim_scen12_n100_learnr.RData')
+
+#n=200
+simout1= mclapply(1:250, function(i) simScenario(i,beta=beta,n=200,sigmae=sigmae,corr=corr,censtimes=censtimes1,scenario=1,nknots=c(9,14,19)),mc.preschedule=FALSE,mc.cores=4)
+simout2= mclapply(1:250, function(i) simScenario(i,beta=beta,n=200,sigmae=sigmae,corr=corr,censtimes=censtimes2,scenario=2,nknots=c(9,14,19)),mc.preschedule=FALSE,mc.cores=4)
+meansim1= averageSims(simout1)
+meansim2= averageSims(simout2)
+margpp1= margpp(simout1)
+margpp2= margpp(simout2)
+save(meansim1, meansim2, margpp1, margpp2, file='sim_scen12_n200_learnr.RData')
+
+#n=500
+simout1= mclapply(1:250, function(i) simScenario(i,beta=beta,n=500,sigmae=sigmae,corr=corr,censtimes=censtimes1,scenario=1,nknots=c(8,12,16)),mc.preschedule=FALSE,mc.cores=4)
+simout2= mclapply(1:250, function(i) simScenario(i,beta=beta,n=500,sigmae=sigmae,corr=corr,censtimes=censtimes2,scenario=2,nknots=c(8,12,16)),mc.preschedule=FALSE,mc.cores=4)
+meansim1= averageSims(simout1)
+meansim2= averageSims(simout2)
+margpp1= margpp(simout1)
+margpp2= margpp(simout2)
+save(meansim1, meansim2, margpp1, margpp2, file='sim_scen12_n500_learnr.RData')
+
+
+
+#Plot marginal posterior probabilities
+load('sim_scen12_n50_learnr.RData')
+margpp50.scen1= margpp1; margpp50.scen2= margpp2
+load('sim_scen12_n100_learnr.RData')
+margpp100.scen1= margpp1; margpp100.scen2= margpp2
+load('sim_scen12_n200_learnr.RData')
+margpp200.scen1= margpp1; margpp200.scen2= margpp2
+load('sim_scen12_n500_learnr.RData')
+margpp500.scen1= margpp1; margpp500.scen2= margpp2
+
+n= rep(c(50,100,200,500),3); model= rep(c('Linear','Non-linear','Linear and non-linear'),each=4)
+margpp.scen1= data.frame(model,n,round(rbind(margpp50.scen1[1,], margpp100.scen1[1,], margpp200.scen1[1,], margpp500.scen1[1,], margpp50.scen1[2,], margpp100.scen1[2,], margpp200.scen1[2,], margpp500.scen1[2,], margpp50.scen1[3,], margpp100.scen1[3,], margpp200.scen1[3,], margpp500.scen1[3,]),3))
+margpp.scen2= data.frame(model,n,round(rbind(margpp50.scen2[1,], margpp100.scen2[1,], margpp200.scen2[1,], margpp500.scen2[1,], margpp50.scen2[2,], margpp100.scen2[2,], margpp200.scen2[2,], margpp500.scen2[2,], margpp50.scen2[3,], margpp100.scen2[3,], margpp200.scen2[3,], margpp500.scen2[3,]),3))
+
+
+#Scenario 1, linear effects
+x2plot= margpp.scen1[margpp.scen1$model =='Linear',]
+par(mar=c(2,4.5,.1,.1)); ylim= c(0,1); ylab='Marginal posterior inclusion probability'
+matplot(x2plot$n, x2plot$X1..uncensored, type='l', ylab=ylab, ylim=ylim, xlab='', cex.lab=1.3, cex.axis=1.3, col='gray', lwd=4, xaxt='n')
+axis(1,at=x2plot$n, labels=x2plot$n, cex.axis=1.3)
+lines(x2plot$n, x2plot$X1..censored)
+lines(x2plot$n, x2plot$X2..uncensored, col='gray', lwd=3, lty=2)
+lines(x2plot$n, x2plot$X2..censored, lty=2)
+points(x2plot$n, x2plot$X1..uncensored, col='gray', cex=1.5)
+points(x2plot$n, x2plot$X1..censored, pch=2)
+points(x2plot$n, x2plot$X2..uncensored, col='gray', cex=1.5)
+points(x2plot$n, x2plot$X2..censored, pch=2)
+text(100, x2plot$X1..uncensored[1], 'X1, Uncensored',pos=3,cex=1.3)
+text(100, x2plot$X1..censored[1], 'X1, Censored',pos=1,cex=1.3)
+text(100, x2plot$X2..uncensored[1], 'X2, Uncensored',pos=3,cex=1.3)
+text(100, x2plot$X2..censored[1], 'X2, Censored',pos=1,cex=1.3)
+text(250, 0, expression(paste("ONLY LINEAR EFFECTS (", gamma[j] %in% plain("{0,1}"),")")), cex=1.6)
+
+
+#Scenario 1, non-linear effects
+x2plot= margpp.scen1[margpp.scen1$model =='Non-linear',]
+par(mar=c(2,4.5,.1,.1)); ylim= c(0,1); ylab='Marginal posterior inclusion probability'
+plot(x2plot$n, x2plot$X1..uncensored, type='l', ylab=ylab, ylim=ylim, xlab='', cex.lab=1.3, cex.axis=1.3, col='gray', lwd=4, xaxt='n')
+axis(1,at=x2plot$n, labels=x2plot$n, cex.axis=1.3)
+lines(x2plot$n, x2plot$X1..censored)
+lines(x2plot$n, x2plot$X2..uncensored, col='gray', lwd=3, lty=2)
+lines(x2plot$n, x2plot$X2..censored, lty=2)
+points(x2plot$n, x2plot$X1..uncensored, col='gray', cex=1.5)
+points(x2plot$n, x2plot$X1..censored, pch=2)
+points(x2plot$n, x2plot$X2..uncensored, col='gray', cex=1.5)
+points(x2plot$n, x2plot$X2..censored, pch=2)
+text(100, x2plot$X1..uncensored[1], 'X1, Uncensored',pos=3,cex=1.3)
+text(100, x2plot$X1..censored[1], 'X1, Censored',pos=1,cex=1.3)
+text(100, x2plot$X2..uncensored[1], 'X2, Uncensored',pos=3,cex=1.3)
+text(100, x2plot$X2..censored[1], 'X2, Censored',pos=1,cex=1.3)
+text(250, 0, expression(paste("ONLY NON-LINEAR EFFECTS (", gamma[j] %in% plain("{0,2}"),")")), cex=1.6)
+
+
+#Scenario 1, linear & non-linear effects
+x2plot= margpp.scen1[margpp.scen1$model =='Linear and non-linear',]
+par(mar=c(4.5,4.5,.1,.1)); ylim= c(0,1); ylab='Marginal posterior inclusion probability'
+plot(x2plot$n, x2plot$X1..uncensored, type='l', ylab=ylab, ylim=ylim, xlab='n', cex.lab=1.3, cex.axis=1.3, col='gray', lwd=4, xaxt='n')
+axis(1,at=x2plot$n, labels=x2plot$n, cex.axis=1.3)
+lines(x2plot$n, x2plot$X1..censored)
+lines(x2plot$n, x2plot$X2..uncensored, col='gray', lwd=3, lty=2)
+lines(x2plot$n, x2plot$X2..censored, lty=2)
+points(x2plot$n, x2plot$X1..uncensored, col='gray', cex=1.5)
+points(x2plot$n, x2plot$X1..censored, pch=2)
+points(x2plot$n, x2plot$X2..uncensored, col='gray', cex=1.5)
+points(x2plot$n, x2plot$X2..censored, pch=2)
+text(100, x2plot$X1..uncensored[1], 'X1, Uncensored',pos=3,cex=1.3)
+text(100, x2plot$X1..censored[1], 'X1, Censored',pos=1,cex=1.3)
+text(100, x2plot$X2..uncensored[1], 'X2, Uncensored',pos=3,cex=1.3)
+text(100, x2plot$X2..censored[1], 'X2, Censored',pos=1,cex=1.3)
+text(275, 0, expression(paste("LINEAR AND NON-LINEAR EFFECTS (", gamma[j] %in% plain("{0,1,2}"),")")), cex=1.6)
+
+
+#Scenario 2, only linear effects
+x2plot= margpp.scen2[margpp.scen2$model =='Linear',]
+par(mar=c(2,4.5,.1,.1)); ylim= c(0,1); ylab='Marginal posterior inclusion probability'
+plot(x2plot$n, x2plot$X1..uncensored, type='l', ylab=ylab, ylim=ylim, xlab='', cex.lab=1.3, cex.axis=1.3, col='gray', lwd=4, xaxt='n')
+axis(1,at=x2plot$n, labels=x2plot$n, cex.axis=1.3)
+lines(x2plot$n, x2plot$X1..censored)
+lines(x2plot$n, x2plot$X2..uncensored, col='gray', lwd=3, lty=2)
+lines(x2plot$n, x2plot$X2..censored, lty=2)
+points(x2plot$n, x2plot$X1..uncensored, col='gray', cex=1.5)
+points(x2plot$n, x2plot$X1..censored, pch=2)
+points(x2plot$n, x2plot$X2..uncensored, col='gray', cex=1.5)
+points(x2plot$n, x2plot$X2..censored, pch=2)
+text(100, x2plot$X1..uncensored[1], 'X1, Uncensored',pos=3,cex=1.3)
+text(100, x2plot$X1..censored[1], 'X1, Censored',pos=1,cex=1.3)
+text(100, x2plot$X2..uncensored[1], 'X2, Uncensored',pos=3,cex=1.3)
+text(100, x2plot$X2..censored[1], 'X2, Censored',pos=1,cex=1.3)
+text(250, 0, expression(paste("ONLY LINEAR EFFECTS (", gamma[j] %in% plain("{0,1}"),")")), cex=1.6)
+
+
+#Scenario 2, non-linear effects
+x2plot= margpp.scen2[margpp.scen2$model =='Non-linear',]
+par(mar=c(2,4.5,.1,.1)); ylim= c(0,1); ylab='Marginal posterior inclusion probability'
+plot(x2plot$n, x2plot$X1..uncensored, type='l', ylab=ylab, ylim=ylim, xlab='', cex.lab=1.3, cex.axis=1.3, col='gray', lwd=4, xaxt='n')
+axis(1,at=x2plot$n, labels=x2plot$n, cex.axis=1.3)
+lines(x2plot$n, x2plot$X1..censored)
+lines(x2plot$n, x2plot$X2..uncensored, col='gray', lwd=3, lty=2)
+lines(x2plot$n, x2plot$X2..censored, lty=2)
+points(x2plot$n, x2plot$X1..uncensored, col='gray', cex=1.5)
+points(x2plot$n, x2plot$X1..censored, pch=2)
+points(x2plot$n, x2plot$X2..uncensored, col='gray', cex=1.5)
+points(x2plot$n, x2plot$X2..censored, pch=2)
+text(100, x2plot$X1..uncensored[1], 'X1, Uncensored',pos=3,cex=1.3)
+text(100, x2plot$X1..censored[1], 'X1, Censored',pos=1,cex=1.3)
+text(100, x2plot$X2..uncensored[1], 'X2, Uncensored',pos=3,cex=1.3)
+text(100, x2plot$X2..censored[1], 'X2, Censored',pos=1,cex=1.3)
+text(250, 0, expression(paste("ONLY NON-LINEAR EFFECTS (", gamma[j] %in% plain("{0,2}"),")")), cex=1.6)
+
+
+#Scenario 2, linear & non-linear effects
+x2plot= margpp.scen2[margpp.scen2$model =='Linear and non-linear',]
+par(mar=c(4.5,4.5,.1,.1)); ylim= c(0,1); ylab='Marginal posterior inclusion probability'
+plot(x2plot$n, x2plot$X1..uncensored, type='l', ylab=ylab, ylim=ylim, xlab='n', cex.lab=1.3, cex.axis=1.3, col='gray', lwd=4, xaxt='n')
+axis(1,at=x2plot$n, labels=x2plot$n, cex.axis=1.3)
+lines(x2plot$n, x2plot$X1..censored)
+lines(x2plot$n, x2plot$X2..uncensored, col='gray', lwd=3, lty=2)
+lines(x2plot$n, x2plot$X2..censored, lty=2)
+points(x2plot$n, x2plot$X1..uncensored, col='gray', cex=1.5)
+points(x2plot$n, x2plot$X1..censored, pch=2)
+points(x2plot$n, x2plot$X2..uncensored, col='gray', cex=1.5)
+points(x2plot$n, x2plot$X2..censored, pch=2)
+text(100, x2plot$X1..uncensored[1], 'X1, Uncensored',pos=3,cex=1.3)
+text(100, x2plot$X1..censored[1], 'X1, Censored',pos=1,cex=1.3)
+text(100, x2plot$X2..uncensored[1], 'X2, Uncensored',pos=1,cex=1.3)
+text(100, x2plot$X2..censored[1], 'X2, Censored',pos=1,cex=1.3)
+text(275, 0, expression(paste("LINEAR AND NON-LINEAR EFFECTS (", gamma[j] %in% plain("{0,1,2}"),")")), cex=1.6)
+
+
+
+
+####################################################################################################
+## SIMULATION SCENARIOS 1-2. p=2. FIXED r=5
+####################################################################################################
+
+beta= c(1/3,1/2); sigmae = 0.5; corr=0.5; censtimes1=.5; censtimes2= 1
+
+## MOM + group Zellner prior ##
+###############################
+
+#n=100
+simout1= mclapply(1:250, function(i) simScenario(i,beta=beta,n=100,sigmae=sigmae,corr=corr,censtimes=censtimes1,scenario=1),mc.preschedule=FALSE,mc.cores=4)
+simout2= mclapply(1:250, function(i) simScenario(i,beta=beta,n=100,sigmae=sigmae,corr=corr,censtimes=censtimes2,scenario=2),mc.preschedule=FALSE,mc.cores=4)
+meansim1= averageSims(simout1)
+meansim2= averageSims(simout2)
+margpp1= margpp(simout1)
+margpp2= margpp(simout2)
+save(meansim1, meansim2, margpp1, margpp2, file='sim_scen12_n100.RData')
+
+#n=500
+simout1= mclapply(1:250, function(i) simScenario(i,beta=beta,n=500,sigmae=sigmae,corr=corr,censtimes=censtimes1,scenario=1),mc.preschedule=FALSE,mc.cores=4)
+simout2= mclapply(1:250, function(i) simScenario(i,beta=beta,n=500,sigmae=sigmae,corr=corr,censtimes=censtimes2,scenario=2),mc.preschedule=FALSE,mc.cores=4)
+meansim1= averageSims(simout1)
+meansim2= averageSims(simout2)
+margpp1= margpp(simout1)
+margpp2= margpp(simout2)
+save(meansim1, meansim2, margpp1, margpp2, file='sim_scen12_n500.RData')
+
+
+## group Zellner + group Zellner prior ##
+#########################################
+
+#n=100
+simout1= mclapply(1:250, function(i) simScenario(i,beta=beta,n=100,sigmae=sigmae,corr=corr,censtimes=censtimes1,scenario=1,priorCoef=groupzellnerprior(tau=100)), mc.preschedule=FALSE, mc.cores=4)
+simout2= mclapply(1:250, function(i) simScenario(i,beta=beta,n=100,sigmae=sigmae,corr=corr,censtimes=censtimes2,scenario=2,priorCoef=groupzellnerprior(tau=100)), mc.preschedule=FALSE, mc.cores=4)
+meansim1= averageSims(simout1)
+meansim2= averageSims(simout2)
+margpp1= margpp(simout1)
+margpp2= margpp(simout2)
+save(meansim1, meansim2, margpp1, margpp2, file='sim_scen12_gzell_n100.RData')
+
+#n=500
+simout1= mclapply(1:250, function(i) simScenario(i,beta=beta,n=500,sigmae=sigmae,corr=corr,censtimes=censtimes1,scenario=1,priorCoef=groupzellnerprior(tau=500)),mc.preschedule=FALSE,mc.cores=4)
+simout2= mclapply(1:250, function(i) simScenario(i,beta=beta,n=500,sigmae=sigmae,corr=corr,censtimes=censtimes2,scenario=2,priorCoef=groupzellnerprior(tau=500)),mc.preschedule=FALSE,mc.cores=4)
+meansim1= averageSims(simout1)
+meansim2= averageSims(simout2)
+margpp1= margpp(simout1)
+margpp2= margpp(simout2)
+save(meansim1, meansim2, margpp1, margpp2, file='sim_scen12_gzell_n500.RData')
+
+
+## AFT LASSO ##
+###############
+
+#n=100
+simout1= mclapply(1:250, function(i) simScenarioAFTLASSO(seed=i,beta=beta,n=100,sigmae=sigmae,corr=corr,censtimes=censtimes1,scenario=1),mc.cores=6)
+simout2= mclapply(1:250, function(i) simScenarioAFTLASSO(seed=i,beta=beta,n=100,sigmae=sigmae,corr=corr,censtimes=censtimes2,scenario=2),mc.cores=6)
+sim1.selvars= t(sapply(simout1, '[[', 'nselgroup'))
+sim2.selvars= t(sapply(simout2, '[[', 'nselgroup'))
+save(simout1, simout2, sim1.selvars, sim2.selvars, file='sim_aftlasso_scen12_n100.RData')
+
+#n=500
+simout1= mclapply(1:250, function(i) simScenarioAFTLASSO(seed=i,beta=beta,n=500,sigmae=sigmae,corr=corr,censtimes=censtimes1,scenario=1),mc.cores=6)
+simout2= mclapply(1:250, function(i) simScenarioAFTLASSO(seed=i,beta=beta,n=500,sigmae=sigmae,corr=corr,censtimes=censtimes2,scenario=2),mc.cores=6)
+sim1.selvars= t(sapply(simout1, '[[', 'nselgroup'))
+sim2.selvars= t(sapply(simout2, '[[', 'nselgroup'))
+save(simout1, simout2, sim1.selvars, sim2.selvars, file='sim_aftlasso_scen12_n500.RData')
+
+
+## Cox LASSO ##
+###############
+
+#n=100
+simout1= mclapply(1:250, function(i) simScenarioCoxLASSO(seed=i,beta=beta,n=100,sigmae=sigmae,corr=corr,censtimes=censtimes1,scenario=1),mc.cores=6)
+simout2= mclapply(1:250, function(i) simScenarioCoxLASSO(seed=i,beta=beta,n=100,sigmae=sigmae,corr=corr,censtimes=censtimes2,scenario=2),mc.cores=6)
+sim1.selvars= t(sapply(simout1, '[[', 'nselgroup'))
+sim2.selvars= t(sapply(simout2, '[[', 'nselgroup'))
+save(simout1, simout2, sim1.selvars, sim2.selvars, file='sim_coxlasso_scen12_n100.RData')
+
+#n=500
+simout1= mclapply(1:250, function(i) simScenarioCoxLASSO(seed=i,beta=beta,n=500,sigmae=sigmae,corr=corr,censtimes=censtimes1,scenario=1),mc.cores=6)
+simout2= mclapply(1:250, function(i) simScenarioCoxLASSO(seed=i,beta=beta,n=500,sigmae=sigmae,corr=corr,censtimes=censtimes2,scenario=2),mc.cores=6)
+sim1.selvars= t(sapply(simout1, '[[', 'nselgroup'))
+sim2.selvars= t(sapply(simout2, '[[', 'nselgroup'))
+save(simout1, simout2, sim1.selvars, sim2.selvars, file='sim_coxlasso_scen12_n500.RData')
+
+
+## Cox iMOM ##
+##############
+
+#n=100
+simout1= mclapply(1:250, function(i) simScenarioCoxiMOM(i,beta=beta,n=100,sigmae=sigmae,corr=corr,censtimes=censtimes1,scenario=1,linearfit=TRUE),mc.preschedule=FALSE,mc.cores=4)
+simout2= mclapply(1:250, function(i) simScenarioCoxiMOM(i,beta=beta,n=100,sigmae=sigmae,corr=corr,censtimes=censtimes2,scenario=2,linearfit=TRUE),mc.preschedule=FALSE,mc.cores=4)
+save(simout1, simout2, file='sim_coximom_scen12_n100.RData')
+
+#n=500
+simout1= mclapply(1:250, function(i) simScenarioCoxiMOM(i,beta=beta,n=500,sigmae=sigmae,corr=corr,censtimes=censtimes1,scenario=1,linearfit=TRUE),mc.preschedule=FALSE,mc.cores=4)
+simout2= mclapply(1:250, function(i) simScenarioCoxiMOM(i,beta=beta,n=500,sigmae=sigmae,corr=corr,censtimes=censtimes2,scenario=2,linearfit=TRUE),mc.preschedule=FALSE,mc.cores=4)
+save(simout1, simout2, file='sim_coximom_scen12_n500.RData')
+
+
+
+
+## RESULTS ##
+#############
+
+
+#Marginal posterior probabilities (MOM)
+load('sim_scen12_n100.RData')
+margpp100.scen1= margpp1; margpp100.scen2= margpp2
+load('sim_scen12_n500.RData')
+margpp500.scen1= margpp1; margpp500.scen2= margpp2
+
+n= rep(c(100,500),3); model= rep(c('Linear','Non-linear','Linear and non-linear'),each=2)
+margpp.scen1= data.frame(model,n,round(rbind(margpp100.scen1[1,], margpp500.scen1[1,], margpp100.scen1[2,], margpp500.scen1[2,], margpp100.scen1[3,], margpp500.scen1[3,]),3))
+margpp.scen2= data.frame(model,n,round(rbind(margpp100.scen2[1,], margpp500.scen2[1,], margpp100.scen2[2,], margpp500.scen2[2,], margpp100.scen2[3,], margpp500.scen2[3,]),3))
+tab= t(cbind(margpp.scen1,margpp.scen2[,-1:-2]))
+
+xtable(tab)
+
+
+#Marginal posterior probabilities (group Zellner)
+load('sim_scen12_gzell_n100.RData')
+margpp100.scen1= margpp1; margpp100.scen2= margpp2
+load('sim_scen12_gzell_n500.RData')
+margpp500.scen1= margpp1; margpp500.scen2= margpp2
+
+n= rep(c(100,500),3); model= rep(c('Linear','Non-linear','Linear and non-linear'),each=2)
+margpp.scen1= data.frame(model,n,round(rbind(margpp100.scen1[1,], margpp500.scen1[1,], margpp100.scen1[2,], margpp500.scen1[2,], margpp100.scen1[3,], margpp500.scen1[3,]),3))
+margpp.scen2= data.frame(model,n,round(rbind(margpp100.scen2[1,], margpp500.scen2[1,], margpp100.scen2[2,], margpp500.scen2[2,], margpp100.scen2[3,], margpp500.scen2[3,]),3))
+tab= t(cbind(margpp.scen1,margpp.scen2[,-1:-2]))
+
+xtable(tab)
+
+
+
+#Plot marginal posterior probabilities
+load('sim_scen12_n100.RData')
+margpp100.scen1= margpp1; margpp100.scen2= margpp2
+load('sim_scen12_n500.RData')
+margpp500.scen1= margpp1; margpp500.scen2= margpp2
+
+n= rep(c(100,500),3); model= rep(c('Linear','Non-linear','Linear and non-linear'),each=2)
+margpp.scen1= data.frame(model,n,round(rbind(margpp100.scen1[1,], margpp500.scen1[1,], margpp100.scen1[2,], margpp500.scen1[2,], margpp100.scen1[3,], margpp500.scen1[3,]),3))
+margpp.scen2= data.frame(model,n,round(rbind(margpp100.scen2[1,], margpp500.scen2[1,], margpp100.scen2[2,], margpp500.scen2[2,], margpp100.scen2[3,], margpp500.scen2[3,]),3))
+
+
+#Scenario 1, only linear terms
+x2plot= margpp.scen1[margpp.scen1$model =='Linear',]
+par(mar=c(2,4.5,.1,.1)); ylim= c(0,1); ylab='Marginal posterior inclusion probability'
+matplot(x2plot$n, x2plot$X1..uncensored, type='l', ylab=ylab, ylim=ylim, xlab='', cex.lab=1.3, cex.axis=1.3, col='gray', lwd=4)
+lines(x2plot$n, x2plot$X1..censored)
+lines(x2plot$n, x2plot$X2..uncensored, col='gray', lwd=3, lty=2)
+lines(x2plot$n, x2plot$X2..censored, lty=2)
+points(x2plot$n, x2plot$X1..uncensored, col='gray', cex=1.5)
+points(x2plot$n, x2plot$X1..censored, pch=2)
+points(x2plot$n, x2plot$X2..uncensored, col='gray', cex=1.5)
+points(x2plot$n, x2plot$X2..censored, pch=2)
+text(140, x2plot$X1..uncensored[1], 'X1, Uncensored',pos=3,cex=1.3)
+text(140, x2plot$X1..censored[1], 'X1, Censored',pos=1,cex=1.3)
+text(140, x2plot$X2..uncensored[1], 'X2, Uncensored',pos=3,cex=1.3)
+text(140, x2plot$X2..censored[1], 'X2, Censored',pos=1,cex=1.3)
+text(300, 0, expression(paste("ONLY LINEAR EFFECTS (", gamma[j] %in% plain("{0,1}"),")")), cex=1.6)
+
+#Scenario 1, only non-linear terms
+x2plot= margpp.scen1[margpp.scen1$model =='Non-linear',]
+par(mar=c(2,4.5,.1,.1)); ylim= c(0,1); ylab='Marginal posterior inclusion probability'
+plot(x2plot$n, x2plot$X1..uncensored, type='l', ylab=ylab, ylim=ylim, xlab='', cex.lab=1.3, cex.axis=1.3, col='gray', lwd=4)
+lines(x2plot$n, x2plot$X1..censored)
+lines(x2plot$n, x2plot$X2..uncensored, col='gray', lwd=3, lty=2)
+lines(x2plot$n, x2plot$X2..censored, lty=2)
+points(x2plot$n, x2plot$X1..uncensored, col='gray', cex=1.5)
+points(x2plot$n, x2plot$X1..censored, pch=2)
+points(x2plot$n, x2plot$X2..uncensored, col='gray', cex=1.5)
+points(x2plot$n, x2plot$X2..censored, pch=2)
+text(140, x2plot$X1..uncensored[1], 'X1, Uncensored',pos=3,cex=1.3)
+text(140, x2plot$X1..censored[1], 'X1, Censored',pos=1,cex=1.3)
+text(140, x2plot$X2..uncensored[1], 'X2, Uncensored',pos=3,cex=1.3)
+text(140, x2plot$X2..censored[1], 'X2, Censored',pos=1,cex=1.3)
+text(300, 0, expression(paste("ONLY NON-LINEAR EFFECTS (", gamma[j] %in% plain("{0,2}"),")")), cex=1.6)
+
+#Scenario 1, linear & non-linear terms
+x2plot= margpp.scen1[margpp.scen1$model =='Linear and non-linear',]
+par(mar=c(4.5,4.5,.1,.1)); ylim= c(0,1); ylab='Marginal posterior inclusion probability'
+plot(x2plot$n, x2plot$X1..uncensored, type='l', ylab=ylab, ylim=ylim, xlab='n', cex.lab=1.3, cex.axis=1.3, col='gray', lwd=4)
+lines(x2plot$n, x2plot$X1..censored)
+lines(x2plot$n, x2plot$X2..uncensored, col='gray', lwd=3, lty=2)
+lines(x2plot$n, x2plot$X2..censored, lty=2)
+points(x2plot$n, x2plot$X1..uncensored, col='gray', cex=1.5)
+points(x2plot$n, x2plot$X1..censored, pch=2)
+points(x2plot$n, x2plot$X2..uncensored, col='gray', cex=1.5)
+points(x2plot$n, x2plot$X2..censored, pch=2)
+text(140, x2plot$X1..uncensored[1], 'X1, Uncensored',pos=3,cex=1.3)
+text(140, x2plot$X1..censored[1], 'X1, Censored',pos=1,cex=1.3)
+text(140, x2plot$X2..uncensored[1], 'X2, Uncensored',pos=3,cex=1.3)
+text(140, x2plot$X2..censored[1], 'X2, Censored',pos=1,cex=1.3)
+text(300, 0, expression(paste("LINEAR AND NON-LINEAR EFFECTS (", gamma[j] %in% plain("{0,1,2}"),")")), cex=1.6)
+
+
+#Scenario 2, only linear terms
+x2plot= margpp.scen2[margpp.scen2$model =='Linear',]
+par(mar=c(2,4.5,.1,.1)); ylim= c(0,1); ylab='Marginal posterior inclusion probability'
+plot(x2plot$n, x2plot$X1..uncensored, type='l', ylab=ylab, ylim=ylim, xlab='', cex.lab=1.3, cex.axis=1.3, col='gray', lwd=4)
+lines(x2plot$n, x2plot$X1..censored)
+lines(x2plot$n, x2plot$X2..uncensored, col='gray', lwd=3, lty=2)
+lines(x2plot$n, x2plot$X2..censored, lty=2)
+points(x2plot$n, x2plot$X1..uncensored, col='gray', cex=1.5)
+points(x2plot$n, x2plot$X1..censored, pch=2)
+points(x2plot$n, x2plot$X2..uncensored, col='gray', cex=1.5)
+points(x2plot$n, x2plot$X2..censored, pch=2)
+text(140, x2plot$X1..uncensored[1], 'X1, Uncensored',pos=3,cex=1.3)
+text(140, x2plot$X1..censored[1], 'X1, Censored',pos=1,cex=1.3)
+text(140, x2plot$X2..uncensored[1], 'X2, Uncensored',pos=3,cex=1.3)
+text(140, x2plot$X2..censored[1], 'X2, Censored',pos=1,cex=1.3)
+text(300, 0, expression(paste("ONLY LINEAR EFFECTS (", gamma[j] %in% plain("{0,1}"),")")), cex=1.6)
+
+#Scenario 2, only non-linear terms
+x2plot= margpp.scen2[margpp.scen2$model =='Non-linear',]
+par(mar=c(2,4.5,.1,.1)); ylim= c(0,1); ylab='Marginal posterior inclusion probability'
+plot(x2plot$n, x2plot$X1..uncensored, type='l', ylab=ylab, ylim=ylim, xlab='', cex.lab=1.3, cex.axis=1.3, col='gray', lwd=4)
+lines(x2plot$n, x2plot$X1..censored)
+lines(x2plot$n, x2plot$X2..uncensored, col='gray', lwd=3, lty=2)
+lines(x2plot$n, x2plot$X2..censored, lty=2)
+points(x2plot$n, x2plot$X1..uncensored, col='gray', cex=1.5)
+points(x2plot$n, x2plot$X1..censored, pch=2)
+points(x2plot$n, x2plot$X2..uncensored, col='gray', cex=1.5)
+points(x2plot$n, x2plot$X2..censored, pch=2)
+text(140, x2plot$X1..uncensored[1], 'X1, Uncensored',pos=3,cex=1.3)
+text(140, x2plot$X1..censored[1], 'X1, Censored',pos=1,cex=1.3)
+text(140, x2plot$X2..uncensored[1], 'X2, Uncensored',pos=3,cex=1.3)
+text(140, x2plot$X2..censored[1], 'X2, Censored',pos=1,cex=1.3)
+text(300, 0, expression(paste("ONLY NON-LINEAR EFFECTS (", gamma[j] %in% plain("{0,2}"),")")), cex=1.6)
+
+#Scenario 2, linear and non-linear terms
+x2plot= margpp.scen2[margpp.scen2$model =='Linear and non-linear',]
+par(mar=c(4.5,4.5,.1,.1)); ylim= c(0,1); ylab='Marginal posterior inclusion probability'
+plot(x2plot$n, x2plot$X1..uncensored, type='l', ylab=ylab, ylim=ylim, xlab='n', cex.lab=1.3, cex.axis=1.3, col='gray', lwd=4)
+lines(x2plot$n, x2plot$X1..censored)
+lines(x2plot$n, x2plot$X2..uncensored, col='gray', lwd=3, lty=2)
+lines(x2plot$n, x2plot$X2..censored, lty=2)
+points(x2plot$n, x2plot$X1..uncensored, col='gray', cex=1.5)
+points(x2plot$n, x2plot$X1..censored, pch=2)
+points(x2plot$n, x2plot$X2..uncensored, col='gray', cex=1.5)
+points(x2plot$n, x2plot$X2..censored, pch=2)
+text(140, x2plot$X1..uncensored[1], 'X1, Uncensored',pos=3,cex=1.3)
+text(140, x2plot$X1..censored[1], 'X1, Censored',pos=1,cex=1.3)
+text(140, x2plot$X2..uncensored[1], 'X2, Uncensored',pos=3,cex=1.3)
+text(140, x2plot$X2..censored[1], 'X2, Censored',pos=1,cex=1.3)
+text(300, 0, expression(paste("LINEAR AND NON-LINEAR EFFECTS (", gamma[j] %in% plain("{0,1,2}"),")")), cex=1.6)
+
+
+
+####################################################################################################
+## SIMULATION SCENARIOS 1-2. ASYMMETRIC LAPLACE ERRORS. p=2
+####################################################################################################
+
+#Test that error sd is the same as for Normal errors
+sigmae=0.5; asym= -0.5;
+scale= 0.5 * sigmae^2 / (1+asym^2)
+sd(rnorm(10^5,0,sigmae))
+sd(ralapl(10^6,0,scale=scale,alpha= asym))
+
+beta= c(1/3,1/2); sigmae = 0.5; corr=0.5; censtimes1=.5; censtimes2= 1
+
+#Run simulations for n=100
+simout1= mclapply(1:250, function(i) simScenario(i,beta=beta,n=100,sigmae=sigmae,corr=corr,censtimes=censtimes1,scenario=1,errors='laplace',asym=-0.5),mc.preschedule=FALSE,mc.cores=4)
+simout2= mclapply(1:250, function(i) simScenario(i,beta=beta,n=100,sigmae=sigmae,corr=corr,censtimes=censtimes2,scenario=2,errors='laplace',asym=-0.5),mc.preschedule=FALSE,mc.cores=4)
+meansim1= averageSims(simout1)
+meansim2= averageSims(simout2)
+margpp1= margpp(simout1)
+margpp2= margpp(simout2)
+save(meansim1, meansim2, margpp1, margpp2, file='sim_scen12_n100_alaplace.RData')
+
+#Run simulations for n=500
+simout1= mclapply(1:250, function(i) simScenario(i,beta=beta,n=500,sigmae=sigmae,corr=corr,censtimes=censtimes1,scenario=1,errors='laplace',asym=-0.5),mc.preschedule=FALSE,mc.cores=4)
+simout2= mclapply(1:250, function(i) simScenario(i,beta=beta,n=500,sigmae=sigmae,corr=corr,censtimes=censtimes2,scenario=2,errors='laplace',asym=-0.5),mc.preschedule=FALSE,mc.cores=4)
+meansim1= averageSims(simout1)
+meansim2= averageSims(simout2)
+margpp1= margpp(simout1)
+margpp2= margpp(simout2)
+save(meansim1, meansim2, margpp1, margpp2, file='sim_scen12_n500_alaplace.RData')
+
+
+## AFT LASSO ##
+###############
+
+#n=100
+simout1= mclapply(1:250, function(i) simScenarioAFTLASSO(seed=i,beta=beta,n=100,sigmae=sigmae,corr=corr,censtimes=censtimes1,scenario=1,errors='laplace',asym=-0.5),mc.cores=6)
+simout2= mclapply(1:250, function(i) simScenarioAFTLASSO(seed=i,beta=beta,n=100,sigmae=sigmae,corr=corr,censtimes=censtimes2,scenario=2,errors='laplace',asym=-0.5),mc.cores=6)
+sim1.selvars= t(sapply(simout1, '[[', 'nselgroup'))
+sim2.selvars= t(sapply(simout2, '[[', 'nselgroup'))
+save(simout1, simout2, sim1.selvars, sim2.selvars, file='sim_aftlasso_scen12_n100_alaplace.RData')
+
+#n=500
+simout1= mclapply(1:250, function(i) simScenarioAFTLASSO(seed=i,beta=beta,n=500,sigmae=sigmae,corr=corr,censtimes=censtimes1,scenario=1,errors='laplace',asym=-0.5),mc.cores=6)
+simout2= mclapply(1:250, function(i) simScenarioAFTLASSO(seed=i,beta=beta,n=500,sigmae=sigmae,corr=corr,censtimes=censtimes2,scenario=2,errors='laplace',asym=-0.5),mc.cores=6)
+sim1.selvars= t(sapply(simout1, '[[', 'nselgroup'))
+sim2.selvars= t(sapply(simout2, '[[', 'nselgroup'))
+save(simout1, simout2, sim1.selvars, sim2.selvars, file='sim_aftlasso_scen12_n500_alaplace.RData')
+
+
+## Cox LASSO ##
+###############
+
+#n=100
+simout1= mclapply(1:250, function(i) simScenarioCoxLASSO(seed=i,beta=beta,n=100,sigmae=sigmae,corr=corr,censtimes=censtimes1,scenario=1,errors='laplace',asym=-0.5),mc.cores=6)
+simout2= mclapply(1:250, function(i) simScenarioCoxLASSO(seed=i,beta=beta,n=100,sigmae=sigmae,corr=corr,censtimes=censtimes2,scenario=2,errors='laplace',asym=-0.5),mc.cores=6)
+sim1.selvars= t(sapply(simout1, '[[', 'nselgroup'))
+sim2.selvars= t(sapply(simout2, '[[', 'nselgroup'))
+save(simout1, simout2, sim1.selvars, sim2.selvars, file='sim_coxlasso_scen12_n100_alaplace.RData')
+
+#n=500
+simout1= mclapply(1:250, function(i) simScenarioCoxLASSO(seed=i,beta=beta,n=500,sigmae=sigmae,corr=corr,censtimes=censtimes1,scenario=1,errors='laplace',asym=-0.5),mc.cores=6)
+simout2= mclapply(1:250, function(i) simScenarioCoxLASSO(seed=i,beta=beta,n=500,sigmae=sigmae,corr=corr,censtimes=censtimes2,scenario=2,errors='laplace',asym=-0.5),mc.cores=6)
+sim1.selvars= t(sapply(simout1, '[[', 'nselgroup'))
+sim2.selvars= t(sapply(simout2, '[[', 'nselgroup'))
+save(simout1, simout2, sim1.selvars, sim2.selvars, file='sim_coxlasso_scen12_n500_alaplace.RData')
+
+
+## Cox iMOM ##
+##############
+
+#n=100
+simout1= mclapply(1:250, function(i) simScenarioCoxiMOM(seed=i,beta=beta,n=100,sigmae=sigmae,corr=corr,censtimes=censtimes1,scenario=1,errors='laplace',asym=-0.5,linearfit=TRUE),mc.cores=4)
+simout2= mclapply(1:250, function(i) simScenarioCoxiMOM(seed=i,beta=beta,n=100,sigmae=sigmae,corr=corr,censtimes=censtimes2,scenario=2,errors='laplace',asym=-0.5,linearfit=TRUE),mc.cores=4)
+save(simout1, simout2, file='sim_coximom_scen12_n100_alaplace.RData')
+
+#n=500
+simout1= mclapply(1:250, function(i) simScenarioCoxiMOM(seed=i,beta=beta,n=500,sigmae=sigmae,corr=corr,censtimes=censtimes1,scenario=1,errors='laplace',asym=-0.5,linearfit=TRUE),mc.cores=4)
+simout2= mclapply(1:250, function(i) simScenarioCoxiMOM(seed=i,beta=beta,n=500,sigmae=sigmae,corr=corr,censtimes=censtimes2,scenario=2,errors='laplace',asym=-0.5,linearfit=TRUE),mc.cores=4)
+save(simout1, simout2, file='sim_coximom_scen12_n500_alaplace.RData')
+
+
+## RESULTS ##
+#############
+
+#Plot marginal posterior probabilities
+load('sim_scen12_n100_alaplace.RData')
+margpp100.scen1= margpp1; margpp100.scen2= margpp2
+load('sim_scen12_n500_alaplace.RData')
+margpp500.scen1= margpp1; margpp500.scen2= margpp2
+
+n= rep(c(100,500),3); model= rep(c('Linear','Non-linear','Linear and non-linear'),each=2)
+margpp.scen1= data.frame(model,n,round(rbind(margpp100.scen1[1,], margpp500.scen1[1,], margpp100.scen1[2,], margpp500.scen1[2,], margpp100.scen1[3,], margpp500.scen1[3,]),3))
+margpp.scen2= data.frame(model,n,round(rbind(margpp100.scen2[1,], margpp500.scen2[1,], margpp100.scen2[2,], margpp500.scen2[2,], margpp100.scen2[3,], margpp500.scen2[3,]),3))
+
+
+#Scenario 1, only linear terms
+x2plot= margpp.scen1[margpp.scen1$model =='Linear',]
+par(mar=c(2,4.5,.1,.1)); ylim= c(0,1); ylab='Marginal posterior inclusion probability'
+matplot(x2plot$n, x2plot$X1..uncensored, type='l', ylab=ylab, ylim=ylim, xlab='', cex.lab=1.3, cex.axis=1.3, col='gray', lwd=4)
+lines(x2plot$n, x2plot$X1..censored)
+lines(x2plot$n, x2plot$X2..uncensored, col='gray', lwd=3, lty=2)
+lines(x2plot$n, x2plot$X2..censored, lty=2)
+points(x2plot$n, x2plot$X1..uncensored, col='gray', cex=1.5)
+points(x2plot$n, x2plot$X1..censored, pch=2)
+points(x2plot$n, x2plot$X2..uncensored, col='gray', cex=1.5)
+points(x2plot$n, x2plot$X2..censored, pch=2)
+text(140, x2plot$X1..uncensored[1], 'X1, Uncensored',pos=3,cex=1.3)
+text(140, x2plot$X1..censored[1], 'X1, Censored',pos=1,cex=1.3)
+text(140, x2plot$X2..uncensored[1], 'X2, Uncensored',pos=3,cex=1.3)
+text(140, x2plot$X2..censored[1], 'X2, Censored',pos=1,cex=1.3)
+text(300, 0, expression(paste("ONLY LINEAR EFFECTS (", gamma[j] %in% plain("{0,1}"),")")), cex=1.6)
+
+
+#Scenario 1, linear & non-linear terms
+x2plot= margpp.scen1[margpp.scen1$model =='Non-linear',]
+par(mar=c(2,4.5,.1,.1)); ylim= c(0,1); ylab='Marginal posterior inclusion probability'
+plot(x2plot$n, x2plot$X1..uncensored, type='l', ylab=ylab, ylim=ylim, xlab='', cex.lab=1.3, cex.axis=1.3, col='gray', lwd=4)
+lines(x2plot$n, x2plot$X1..censored)
+lines(x2plot$n, x2plot$X2..uncensored, col='gray', lwd=3, lty=2)
+lines(x2plot$n, x2plot$X2..censored, lty=2)
+points(x2plot$n, x2plot$X1..uncensored, col='gray', cex=1.5)
+points(x2plot$n, x2plot$X1..censored, pch=2)
+points(x2plot$n, x2plot$X2..uncensored, col='gray', cex=1.5)
+points(x2plot$n, x2plot$X2..censored, pch=2)
+text(140, x2plot$X1..uncensored[1], 'X1, Uncensored',pos=3,cex=1.3)
+text(140, x2plot$X1..censored[1], 'X1, Censored',pos=1,cex=1.3)
+text(140, x2plot$X2..uncensored[1], 'X2, Uncensored',pos=3,cex=1.3)
+text(140, x2plot$X2..censored[1], 'X2, Censored',pos=1,cex=1.3)
+text(300, 0, expression(paste("ONLY NON-LINEAR EFFECTS (", gamma[j] %in% plain("{0,2}"),")")), cex=1.6)
+
+
+#Scenario 1, linear & non-linear terms
+x2plot= margpp.scen1[margpp.scen1$model =='Linear and non-linear',]
+par(mar=c(4.5,4.5,.1,.1)); ylim= c(0,1); ylab='Marginal posterior inclusion probability'
+plot(x2plot$n, x2plot$X1..uncensored, type='l', ylab=ylab, ylim=ylim, xlab='n', cex.lab=1.3, cex.axis=1.3, col='gray', lwd=4)
+lines(x2plot$n, x2plot$X1..censored)
+lines(x2plot$n, x2plot$X2..uncensored, col='gray', lwd=3, lty=2)
+lines(x2plot$n, x2plot$X2..censored, lty=2)
+points(x2plot$n, x2plot$X1..uncensored, col='gray', cex=1.5)
+points(x2plot$n, x2plot$X1..censored, pch=2)
+points(x2plot$n, x2plot$X2..uncensored, col='gray', cex=1.5)
+points(x2plot$n, x2plot$X2..censored, pch=2)
+text(140, x2plot$X1..uncensored[1], 'X1, Uncensored',pos=3,cex=1.3)
+text(140, x2plot$X1..censored[1], 'X1, Censored',pos=1,cex=1.3)
+text(140, x2plot$X2..uncensored[1], 'X2, Uncensored',pos=3,cex=1.3)
+text(140, x2plot$X2..censored[1], 'X2, Censored',pos=1,cex=1.3)
+text(300, 0, expression(paste("LINEAR AND NON-LINEAR EFFECTS (", gamma[j] %in% plain("{0,1,2}"),")")), cex=1.6)
+
+
+#Scenario 2, only linear terms
+x2plot= margpp.scen2[margpp.scen2$model =='Linear',]
+par(mar=c(2,4.5,.1,.1)); ylim= c(0,1); ylab='Marginal posterior inclusion probability'
+plot(x2plot$n, x2plot$X1..uncensored, type='l', ylab=ylab, ylim=ylim, xlab='', cex.lab=1.3, cex.axis=1.3, col='gray', lwd=4)
+lines(x2plot$n, x2plot$X1..censored)
+lines(x2plot$n, x2plot$X2..uncensored, col='gray', lwd=3, lty=2)
+lines(x2plot$n, x2plot$X2..censored, lty=2)
+points(x2plot$n, x2plot$X1..uncensored, col='gray', cex=1.5)
+points(x2plot$n, x2plot$X1..censored, pch=2)
+points(x2plot$n, x2plot$X2..uncensored, col='gray', cex=1.5)
+points(x2plot$n, x2plot$X2..censored, pch=2)
+text(140, x2plot$X1..uncensored[1], 'X1, Uncensored',pos=3,cex=1.3)
+text(140, x2plot$X1..censored[1], 'X1, Censored',pos=1,cex=1.3)
+text(140, x2plot$X2..uncensored[1], 'X2, Uncensored',pos=3,cex=1.3)
+text(140, x2plot$X2..censored[1], 'X2, Censored',pos=1,cex=1.3)
+text(300, 0, expression(paste("ONLY LINEAR EFFECTS (", gamma[j] %in% plain("{0,1}"),")")), cex=1.6)
+
+
+#Scenario 2, only non-linear terms
+x2plot= margpp.scen2[margpp.scen2$model =='Non-linear',]
+par(mar=c(2,4.5,.1,.1)); ylim= c(0,1); ylab='Marginal posterior inclusion probability'
+plot(x2plot$n, x2plot$X1..uncensored, type='l', ylab=ylab, ylim=ylim, xlab='', cex.lab=1.3, cex.axis=1.3, col='gray', lwd=4)
+lines(x2plot$n, x2plot$X1..censored)
+lines(x2plot$n, x2plot$X2..uncensored, col='gray', lwd=3, lty=2)
+lines(x2plot$n, x2plot$X2..censored, lty=2)
+points(x2plot$n, x2plot$X1..uncensored, col='gray', cex=1.5)
+points(x2plot$n, x2plot$X1..censored, pch=2)
+points(x2plot$n, x2plot$X2..uncensored, col='gray', cex=1.5)
+points(x2plot$n, x2plot$X2..censored, pch=2)
+text(140, x2plot$X1..uncensored[1], 'X1, Uncensored',pos=3,cex=1.3)
+text(140, x2plot$X1..censored[1], 'X1, Censored',pos=1,cex=1.3)
+text(140, x2plot$X2..uncensored[1], 'X2, Uncensored',pos=3,cex=1.3)
+text(140, x2plot$X2..censored[1], 'X2, Censored',pos=1,cex=1.3)
+text(300, 0, expression(paste("ONLY NON-LINEAR EFFECTS (", gamma[j] %in% plain("{0,2}"),")")), cex=1.6)
+
+#Scenario 2, linear + non-linear terms
+x2plot= margpp.scen2[margpp.scen2$model =='Linear and non-linear',]
+par(mar=c(4.5,4.5,.1,.1)); ylim= c(0,1); ylab='Marginal posterior inclusion probability'
+plot(x2plot$n, x2plot$X1..uncensored, type='l', ylab=ylab, ylim=ylim, xlab='n', cex.lab=1.3, cex.axis=1.3, col='gray', lwd=4)
+lines(x2plot$n, x2plot$X1..censored)
+lines(x2plot$n, x2plot$X2..uncensored, col='gray', lwd=3, lty=2)
+lines(x2plot$n, x2plot$X2..censored, lty=2)
+points(x2plot$n, x2plot$X1..uncensored, col='gray', cex=1.5)
+points(x2plot$n, x2plot$X1..censored, pch=2)
+points(x2plot$n, x2plot$X2..uncensored, col='gray', cex=1.5)
+points(x2plot$n, x2plot$X2..censored, pch=2)
+text(140, x2plot$X1..uncensored[1], 'X1, Uncensored',pos=3,cex=1.3)
+text(140, x2plot$X1..censored[1], 'X1, Censored',pos=1,cex=1.3)
+text(140, x2plot$X2..uncensored[1], 'X2, Uncensored',pos=3,cex=1.3)
+text(140, x2plot$X2..censored[1], 'X2, Censored',pos=1,cex=1.3)
+text(300, 0, expression(paste("LINEAR AND NON-LINEAR EFFECTS (", gamma[j] %in% plain("{0,1,2}"),")")), cex=1.6)
+
+
+
+
+####################################################################################################
+## SIMULATION SCENARIOS 1-2. p=2. X1 OMITTED FROM ANALYSIS
+####################################################################################################
+
+beta= c(1/3,1/2); sigmae = 0.5; corr=0.5; censtimes1=.5; censtimes2= 1
+
+## MOM + group Zellner prior ##
+###############################
+
+#n=100
+simout1= mclapply(1:250, function(i) simScenario(i,beta=beta,n=100,sigmae=sigmae,corr=corr,censtimes=censtimes1,scenario=1,omitX2=TRUE),mc.preschedule=FALSE,mc.cores=4)
+simout2= mclapply(1:250, function(i) simScenario(i,beta=beta,n=100,sigmae=sigmae,corr=corr,censtimes=censtimes2,scenario=2,omitX2=TRUE),mc.preschedule=FALSE,mc.cores=4)
+margpplin1= rowMeans(sapply(simout1, function(z) z$pplin))
+margppnolin1= rowMeans(sapply(simout1, function(z) z$ppnolin))
+margppsplines1= rowMeans(sapply(simout1, function(z) z$ppsplines))
+margpplin2= rowMeans(sapply(simout2, function(z) z$pplin))
+margppnolin2= rowMeans(sapply(simout2, function(z) z$ppnolin))
+margppsplines2= rowMeans(sapply(simout2, function(z) z$ppsplines))
+save(margpplin1, margppnolin1, margppsplines1, margpplin2, margppnolin2, margppsplines2, file='sim_scen12_n100_omitX2.RData')
+
+#n=500
+simout1= mclapply(1:250, function(i) simScenario(i,beta=beta,n=500,sigmae=sigmae,corr=corr,censtimes=censtimes1,scenario=1,omitX2=TRUE),mc.preschedule=FALSE,mc.cores=4)
+simout2= mclapply(1:250, function(i) simScenario(i,beta=beta,n=500,sigmae=sigmae,corr=corr,censtimes=censtimes2,scenario=2,omitX2=TRUE),mc.preschedule=FALSE,mc.cores=4)
+margpplin1= rowMeans(sapply(simout1, function(z) z$pplin))
+margppnolin1= rowMeans(sapply(simout1, function(z) z$ppnolin))
+margppsplines1= rowMeans(sapply(simout1, function(z) z$ppsplines))
+margpplin2= rowMeans(sapply(simout2, function(z) z$pplin))
+margppnolin2= rowMeans(sapply(simout2, function(z) z$ppnolin))
+margppsplines2= rowMeans(sapply(simout2, function(z) z$ppsplines))
+save(margpplin1, margppnolin1, margppsplines1, margpplin2, margppnolin2, margppsplines2, file='sim_scen12_n500_omitX2.RData')
+
+
+## group Zellner + group Zellner prior ##
+#########################################
+
+#n=100
+simout1= mclapply(1:250, function(i) simScenario(i,beta=beta,n=100,sigmae=sigmae,corr=corr,censtimes=censtimes1,scenario=1,priorCoef=groupzellnerprior(tau=100), omitX2=TRUE), mc.preschedule=FALSE, mc.cores=4)
+simout2= mclapply(1:250, function(i) simScenario(i,beta=beta,n=100,sigmae=sigmae,corr=corr,censtimes=censtimes2,scenario=2,priorCoef=groupzellnerprior(tau=100), omitX2=TRUE), mc.preschedule=FALSE, mc.cores=4)
+margpplin1= rowMeans(sapply(simout1, function(z) z$pplin))
+margppnolin1= rowMeans(sapply(simout1, function(z) z$ppnolin))
+margppsplines1= rowMeans(sapply(simout1, function(z) z$ppsplines))
+margpplin2= rowMeans(sapply(simout2, function(z) z$pplin))
+margppnolin2= rowMeans(sapply(simout2, function(z) z$ppnolin))
+margppsplines2= rowMeans(sapply(simout2, function(z) z$ppsplines))
+save(margpplin1, margppnolin1, margppsplines1, margpplin2, margppnolin2, margppsplines2, file='sim_scen12_gzell_n100_omitX2.RData')
+
+#n=500
+simout1= mclapply(1:250, function(i) simScenario(i,beta=beta,n=500,sigmae=sigmae,corr=corr,censtimes=censtimes1,scenario=1,priorCoef=groupzellnerprior(tau=500), omitX2=TRUE),mc.preschedule=FALSE,mc.cores=4)
+simout2= mclapply(1:250, function(i) simScenario(i,beta=beta,n=500,sigmae=sigmae,corr=corr,censtimes=censtimes2,scenario=2,priorCoef=groupzellnerprior(tau=500), omitX2=TRUE),mc.preschedule=FALSE,mc.cores=4)
+margpplin1= rowMeans(sapply(simout1, function(z) z$pplin))
+margppnolin1= rowMeans(sapply(simout1, function(z) z$ppnolin))
+margppsplines1= rowMeans(sapply(simout1, function(z) z$ppsplines))
+margpplin2= rowMeans(sapply(simout2, function(z) z$pplin))
+margppnolin2= rowMeans(sapply(simout2, function(z) z$ppnolin))
+margppsplines2= rowMeans(sapply(simout2, function(z) z$ppsplines))
+save(margpplin1, margppnolin1, margppsplines1, margpplin2, margppnolin2, margppsplines2, file='sim_scen12_gzell_n500_omitX2.RData')
+
+
+
+
+
+#Plot marginal posterior probabilities
+load('sim_scen12_n100_omitX2.RData')
+margpp100.scen1= c(margpplin1,margppnolin1,margppsplines1)
+margpp100.scen2= c(margpplin2,margppnolin2,margppsplines2)
+load('sim_scen12_n500_omitX2.RData')
+margpp500.scen1= c(margpplin1,margppnolin1,margppsplines1)
+margpp500.scen2= c(margpplin2,margppnolin2,margppsplines2)
+
+n= rep(c(100,500),3); model= rep(c('Linear','Non-linear','Linear and non-linear'),each=2)
+margpp.uncens.scen1= c(margpp100.scen1[1], margpp500.scen1[1], margpp100.scen1[3], margpp500.scen1[3], margpp100.scen1[5], margpp500.scen1[5])
+margpp.cens.scen1= c(margpp100.scen1[2], margpp500.scen1[2], margpp100.scen1[4], margpp500.scen1[4], margpp100.scen1[6], margpp500.scen1[6])
+margpp.scen1= data.frame(model,n,uncens=margpp.uncens.scen1,cens=margpp.cens.scen1)
+
+margpp.uncens.scen2= c(margpp100.scen2[1], margpp500.scen2[1], margpp100.scen2[3], margpp500.scen2[3], margpp100.scen2[5], margpp500.scen2[5])
+margpp.cens.scen2= c(margpp100.scen2[2], margpp500.scen2[2], margpp100.scen2[4], margpp500.scen2[4], margpp100.scen2[6], margpp500.scen2[6])
+margpp.scen2= data.frame(model,n,uncens=margpp.uncens.scen2,cens=margpp.cens.scen2)
+
+
+#Scenario 1, only linear terms, omitting X2
+x2plot= margpp.scen1[margpp.scen1$model =='Linear',]
+par(mar=c(2,4.5,.1,.1)); ylim= c(0,1); ylab='Marginal posterior inclusion probability'
+matplot(x2plot$n, x2plot$uncens, type='l', ylab=ylab, ylim=ylim, xlab='', cex.lab=1.3, cex.axis=1.3, col='gray', lwd=4)
+lines(x2plot$n, x2plot$cens)
+points(x2plot$n, x2plot$uncens, col='gray', cex=1.5)
+points(x2plot$n, x2plot$cens, pch=2)
+text(140, x2plot$uncens[1], 'X1, Uncensored',pos=3,cex=1.3)
+text(140, x2plot$cens[1], 'X1, Censored',pos=1,cex=1.3)
+text(300, 0, expression(paste("ONLY LINEAR EFFECTS (", gamma[1] %in% plain("{0,1}"),")")), cex=1.6)
+
+
+#Scenario 1, only non-linear terms, omitting X2
+x2plot= margpp.scen1[margpp.scen1$model =='Non-linear',]
+par(mar=c(2,4.5,.1,.1)); ylim= c(0,1); ylab='Marginal posterior inclusion probability'
+plot(x2plot$n, x2plot$uncens, type='l', ylab=ylab, ylim=ylim, xlab='', cex.lab=1.3, cex.axis=1.3, col='gray', lwd=4)
+lines(x2plot$n, x2plot$cens)
+points(x2plot$n, x2plot$uncens, col='gray', cex=1.5)
+points(x2plot$n, x2plot$cens, pch=2)
+text(140, x2plot$uncens[1], 'X1, Uncensored',pos=3,cex=1.3)
+text(140, x2plot$cens[1], 'X1, Censored',pos=1,cex=1.3)
+text(300, 0, expression(paste("ONLY NON-LINEAR EFFECTS (", gamma[1] %in% plain("{0,2}"),")")), cex=1.6)
+
+
+#Scenario 1, linear + non-linear terms, omitting X2
+x2plot= margpp.scen1[margpp.scen1$model =='Linear and non-linear',]
+par(mar=c(4.5,4.5,.1,.1)); ylim= c(0,1); ylab='Marginal posterior inclusion probability'
+plot(x2plot$n, x2plot$uncens, type='l', ylab=ylab, ylim=ylim, xlab='n', cex.lab=1.3, cex.axis=1.3, col='gray', lwd=4)
+lines(x2plot$n, x2plot$cens)
+points(x2plot$n, x2plot$uncens, col='gray', cex=1.5)
+points(x2plot$n, x2plot$cens, pch=2)
+text(140, x2plot$uncens[1], 'X1, Uncensored',pos=3,cex=1.3)
+text(140, x2plot$cens[1], 'X1, Censored',pos=1,cex=1.3)
+text(300, 0, expression(paste("LINEAR AND NON-LINEAR EFFECTS (", gamma[1] %in% plain("{0,1,2}"),")")), cex=1.6)
+
+
+#Scenario 2, only linear term, omitting X2
+x2plot= margpp.scen2[margpp.scen2$model =='Linear',]
+par(mar=c(2,4.5,.1,.1)); ylim= c(0,1); ylab='Marginal posterior inclusion probability'
+plot(x2plot$n, x2plot$uncens, type='l', ylab=ylab, ylim=ylim, xlab='', cex.lab=1.3, cex.axis=1.3, col='gray', lwd=4)
+lines(x2plot$n, x2plot$cens)
+points(x2plot$n, x2plot$uncens, col='gray', cex=1.5)
+points(x2plot$n, x2plot$cens, pch=2)
+text(140, x2plot$uncens[1], 'X1, Uncensored',pos=3,cex=1.3)
+text(140, x2plot$cens[1], 'X1, Censored',pos=1,cex=1.3)
+text(300, 0, expression(paste("ONLY LINEAR EFFECTS (", gamma[1] %in% plain("{0,1}"),")")), cex=1.6)
+
+#Scenario 2, only non-linear terms, omitting X2
+x2plot= margpp.scen2[margpp.scen2$model =='Non-linear',]
+par(mar=c(2,4.5,.1,.1)); ylim= c(0,1); ylab='Marginal posterior inclusion probability'
+plot(x2plot$n, x2plot$uncens, type='l', ylab=ylab, ylim=ylim, xlab='', cex.lab=1.3, cex.axis=1.3, col='gray', lwd=4)
+lines(x2plot$n, x2plot$cens)
+points(x2plot$n, x2plot$uncens, col='gray', cex=1.5)
+points(x2plot$n, x2plot$cens, pch=2)
+text(140, x2plot$uncens[1], 'X1, Uncensored',pos=3,cex=1.3)
+text(140, x2plot$cens[1], 'X1, Censored',pos=1,cex=1.3)
+text(300, 0, expression(paste("ONLY NON-LINEAR EFFECTS (", gamma[1] %in% plain("{0,2}"),")")), cex=1.6)
+
+#Scenario 2, linear + non-linear terms, omitting X2
+x2plot= margpp.scen2[margpp.scen2$model =='Linear and non-linear',]
+par(mar=c(4.5,4.5,.1,.1)); ylim= c(0,1); ylab='Marginal posterior inclusion probability'
+plot(x2plot$n, x2plot$uncens, type='l', ylab=ylab, ylim=ylim, xlab='n', cex.lab=1.3, cex.axis=1.3, col='gray', lwd=4)
+lines(x2plot$n, x2plot$cens)
+points(x2plot$n, x2plot$uncens, col='gray', cex=1.5)
+points(x2plot$n, x2plot$cens, pch=2)
+text(140, x2plot$uncens[1], 'X1, Uncensored',pos=3,cex=1.3)
+text(140, x2plot$cens[1], 'X1, Censored',pos=1,cex=1.3)
+text(300, 0, expression(paste("LINEAR AND NON-LINEAR EFFECTS (", gamma[1] %in% plain("{0,1,2}"),")")), cex=1.6)
+
+
+
+####################################################################################################
+## SIMULATION SCENARIOS 1-2. p=50
+####################################################################################################
+
+beta= c(1/3,1/2,rep(0,48)); sigmae = 0.5; corr=0.5; censtimes1=.5; censtimes2= 1
+
+## MOM + group Zellner ##
+#########################
+
+simout1= mclapply(1:250, function(i) simScenarioWithSpur(i,beta=beta,n=100,sigmae=sigmae,corr=corr,censtimes=censtimes1,scenario=1),mc.preschedule=FALSE,mc.cores=6)
+simout2= mclapply(1:250, function(i) simScenarioWithSpur(i,beta=beta,n=100,sigmae=sigmae,corr=corr,censtimes=censtimes2,scenario=2),mc.preschedule=FALSE,mc.cores=6)
+save(simout1, simout2, file='sim_scen12_n100_p50.RData')
+
+simout1= mclapply(1:250, function(i) simScenarioWithSpur(i,beta=beta,n=500,sigmae=sigmae,corr=corr,censtimes=censtimes1,scenario=1),mc.preschedule=FALSE,mc.cores=6)
+simout2= mclapply(1:250, function(i) simScenarioWithSpur(i,beta=beta,n=500,sigmae=sigmae,corr=corr,censtimes=censtimes2,scenario=2),mc.preschedule=FALSE,mc.cores=6)
+save(simout1, simout2, file='sim_scen12_n500_p50.RData')
+
+
+## group Zellner + group Zellner ##
+###################################
+
+simout1= mclapply(1:250, function(i) simScenarioWithSpur(i,beta=beta,n=100,sigmae=sigmae,corr=corr,censtimes=censtimes1,scenario=1,priorCoef=groupzellnerprior(tau=100)),mc.preschedule=FALSE,mc.cores=4)
+simout2= mclapply(1:250, function(i) simScenarioWithSpur(i,beta=beta,n=100,sigmae=sigmae,corr=corr,censtimes=censtimes2,scenario=2,priorCoef=groupzellnerprior(tau=100)),mc.preschedule=FALSE,mc.cores=4)
+save(simout1, simout2, file='sim_scen12_gzell_n100_p50.RData')
+
+simout1= mclapply(1:250, function(i) simScenarioWithSpur(i,beta=beta,n=500,sigmae=sigmae,corr=corr,censtimes=censtimes1,scenario=1,priorCoef=groupzellnerprior(tau=500)),mc.preschedule=FALSE,mc.cores=4)
+simout2= mclapply(1:250, function(i) simScenarioWithSpur(i,beta=beta,n=500,sigmae=sigmae,corr=corr,censtimes=censtimes2,scenario=2,priorCoef=groupzellnerprior(tau=500)),mc.preschedule=FALSE,mc.cores=4)
+save(simout1, simout2, file='sim_scen12_gzell_n500_p50.RData')
+
+
+## AFT LASSO ##
+###############
+
+simout1= mclapply(1:250, function(i) simScenarioAFTLASSO(seed=i,beta=beta,n=100,sigmae=sigmae,corr=corr,censtimes=censtimes1,scenario=1),mc.cores=6)
+simout2= mclapply(1:250, function(i) simScenarioAFTLASSO(seed=i,beta=beta,n=100,sigmae=sigmae,corr=corr,censtimes=censtimes2,scenario=2),mc.cores=6)
+sim1.selvars= t(sapply(simout1, '[[', 'nselgroup'))
+sim2.selvars= t(sapply(simout2, '[[', 'nselgroup'))
+save(simout1, simout2, sim1.selvars, sim2.selvars, file='sim_aftlasso_scen12_n100_p50.RData')
+
+simout1= mclapply(1:250, function(i) simScenarioAFTLASSO(seed=i,beta=beta,n=500,sigmae=sigmae,corr=corr,censtimes=censtimes1,scenario=1),mc.cores=6)
+simout2= mclapply(1:250, function(i) simScenarioAFTLASSO(seed=i,beta=beta,n=500,sigmae=sigmae,corr=corr,censtimes=censtimes2,scenario=2),mc.cores=6)
+sim1.selvars= t(sapply(simout1, '[[', 'nselgroup'))
+sim2.selvars= t(sapply(simout2, '[[', 'nselgroup'))
+save(simout1, simout2, sim1.selvars, sim2.selvars, file='sim_aftlasso_scen12_n500_p50.RData')
+
+
+
+## Cox LASSO ##
+###############
+
+simout1= mclapply(1:250, function(i) simScenarioCoxLASSO(seed=i,beta=beta,n=100,sigmae=sigmae,corr=corr,censtimes=censtimes1,scenario=1),mc.cores=6)
+simout2= mclapply(1:250, function(i) simScenarioCoxLASSO(seed=i,beta=beta,n=100,sigmae=sigmae,corr=corr,censtimes=censtimes2,scenario=2),mc.cores=6)
+sim1.selvars= t(sapply(simout1, '[[', 'nselgroup'))
+sim2.selvars= t(sapply(simout2, '[[', 'nselgroup'))
+save(simout1, simout2, sim1.selvars, sim2.selvars, file='sim_coxlasso_scen12_n100_p50.RData')
+
+simout1= mclapply(1:250, function(i) simScenarioCoxLASSO(seed=i,beta=beta,n=500,sigmae=sigmae,corr=corr,censtimes=censtimes1,scenario=1),mc.cores=6)
+simout2= mclapply(1:250, function(i) simScenarioCoxLASSO(seed=i,beta=beta,n=500,sigmae=sigmae,corr=corr,censtimes=censtimes2,scenario=2),mc.cores=6)
+sim1.selvars= t(sapply(simout1, '[[', 'nselgroup'))
+sim2.selvars= t(sapply(simout2, '[[', 'nselgroup'))
+save(simout1, simout2, sim1.selvars, sim2.selvars, file='sim_coxlasso_scen12_n500_p50.RData')
+
+
+## Cox iMOM ##
+##############
+
+simout1= mclapply(1:250, function(i) simScenarioCoxiMOM(seed=i,beta=beta,n=100,sigmae=sigmae,corr=corr,censtimes=censtimes1,scenario=1),mc.cores=4)
+simout2= mclapply(1:250, function(i) simScenarioCoxiMOM(seed=i,beta=beta,n=100,sigmae=sigmae,corr=corr,censtimes=censtimes2,scenario=2),mc.cores=4)
+save(simout1, simout2, file='sim_coximom_scen12_n100_p50.RData')
+
+simout1= mclapply(1:250, function(i) simScenarioCoxiMOM(seed=i,beta=beta,n=500,sigmae=sigmae,corr=corr,censtimes=censtimes1,scenario=1),mc.cores=4)
+simout2= mclapply(1:250, function(i) simScenarioCoxiMOM(seed=i,beta=beta,n=500,sigmae=sigmae,corr=corr,censtimes=censtimes2,scenario=2),mc.cores=4)
+save(simout1, simout2, file='sim_coximom_scen12_n500_p50.RData')
+
+
+## REPORT RESULTS ##
+####################
+
+## PROPORTION OF CORRECT MODEL SELECTIONS
+load('sim_scen12_n100_p50.RData')
+tabs1uncens.n100= data.frame(method='AFT pMOMZ',n=100,correctselmombf(simout1,p=50,active=1:2,uncens=TRUE))
+tabs1cens.n100= data.frame(method='AFT pMOMZ',n=100,correctselmombf(simout1,p=50,active=1:2,uncens=FALSE))
+tabs2uncens.n100= data.frame(method='AFT pMOMZ',n=100,correctselmombf(simout2,p=50,active=1:2,uncens=TRUE))
+tabs2cens.n100= data.frame(method='AFT pMOMZ',n=100,correctselmombf(simout2,p=50,active=1:2,uncens=FALSE))
+load('sim_scen12_n500_p50.RData')
+tabs1uncens.n500= data.frame(method='AFT pMOMZ',n=500,correctselmombf(simout1,p=50,active=1:2,uncens=TRUE))
+tabs1cens.n500= data.frame(method='AFT pMOMZ',n=500,correctselmombf(simout1,p=50,active=1:2,uncens=FALSE))
+tabs2uncens.n500= data.frame(method='AFT pMOMZ',n=500,correctselmombf(simout2,p=50,active=1:2,uncens=TRUE))
+tabs2cens.n500= data.frame(method='AFT pMOMZ',n=500,correctselmombf(simout2,p=50,active=1:2,uncens=FALSE))
+
+load('sim_scen12_gzell_n100_p50.RData')
+tabs1uncens.gzell.n100= data.frame(method='AFT Zellner',n=100,correctselmombf(simout1,p=50,active=1:2,uncens=TRUE))
+tabs1cens.gzell.n100= data.frame(method='AFT Zellner',n=100,correctselmombf(simout1,p=50,active=1:2,uncens=FALSE))
+tabs2uncens.gzell.n100= data.frame(method='AFT Zellner',n=100,correctselmombf(simout2,p=50,active=1:2,uncens=TRUE))
+tabs2cens.gzell.n100= data.frame(method='AFT Zellner',n=100,correctselmombf(simout2,p=50,active=1:2,uncens=FALSE))
+load('sim_scen12_gzell_n500_p50.RData')
+tabs1uncens.gzell.n500= data.frame(method='AFT Zellner',n=500,correctselmombf(simout1,p=50,active=1:2,uncens=TRUE))
+tabs1cens.gzell.n500= data.frame(method='AFT Zellner',n=500,correctselmombf(simout1,p=50,active=1:2,uncens=FALSE))
+tabs2uncens.gzell.n500= data.frame(method='AFT Zellner',n=500,correctselmombf(simout2,p=50,active=1:2,uncens=TRUE))
+tabs2cens.gzell.n500= data.frame(method='AFT Zellner',n=500,correctselmombf(simout2,p=50,active=1:2,uncens=FALSE))
+
+load('sim_coximom_scen12_n100_p50.RData')
+tabs1uncens.coximom.n100= data.frame(method='Cox iMOM',n=100,correctselCoxiMOM(simout1,p=50,active=1:2,uncens=TRUE))
+tabs1cens.coximom.n100= data.frame(method='Cox iMOM',n=100,correctselCoxiMOM(simout1,p=50,active=1:2,uncens=FALSE))
+tabs2uncens.coximom.n100= data.frame(method='Cox iMOM',n=100,correctselCoxiMOM(simout2,p=50,active=1:2,uncens=TRUE))
+tabs2cens.coximom.n100= data.frame(method='Cox iMOM',n=100,correctselCoxiMOM(simout2,p=50,active=1:2,uncens=FALSE))
+load('sim_coximom_scen12_n500_p50.RData')
+tabs1uncens.coximom.n500= data.frame(method='Cox iMOM',n=500,correctselCoxiMOM(simout1,p=50,active=1:2,uncens=TRUE))
+tabs1cens.coximom.n500= data.frame(method='Cox iMOM',n=500,correctselCoxiMOM(simout1,p=50,active=1:2,uncens=FALSE))
+tabs2uncens.coximom.n500= data.frame(method='Cox iMOM',n=500,correctselCoxiMOM(simout2,p=50,active=1:2,uncens=TRUE))
+tabs2cens.coximom.n500= data.frame(method='Cox iMOM',n=500,correctselCoxiMOM(simout2,p=50,active=1:2,uncens=FALSE))
+
+
+load('sim_aftlasso_scen12_n100_p50.RData')
+tabs1uncens.aftlasso.n100= data.frame(method='AFT LASSO',n=100,correctselLASSO(simout1,p=50,active=1:2,uncens=TRUE))
+tabs1cens.aftlasso.n100= data.frame(method='AFT LASSO',n=100,correctselLASSO(simout1,p=50,active=1:2,uncens=FALSE))
+tabs2uncens.aftlasso.n100= data.frame(method='AFT LASSO',n=100,correctselLASSO(simout2,p=50,active=1:2,uncens=TRUE))
+tabs2cens.aftlasso.n100= data.frame(method='AFT LASSO',n=100,correctselLASSO(simout2,p=50,active=1:2,uncens=FALSE))
+load('sim_aftlasso_scen12_n500_p50.RData')
+tabs1uncens.aftlasso.n500= data.frame(method='AFT LASSO',n=500,correctselLASSO(simout1,p=50,active=1:2,uncens=TRUE))
+tabs1cens.aftlasso.n500= data.frame(method='AFT LASSO',n=500,correctselLASSO(simout1,p=50,active=1:2,uncens=FALSE))
+tabs2uncens.aftlasso.n500= data.frame(method='AFT LASSO',n=500,correctselLASSO(simout2,p=50,active=1:2,uncens=TRUE))
+tabs2cens.aftlasso.n500= data.frame(method='AFT LASSO',n=500,correctselLASSO(simout2,p=50,active=1:2,uncens=FALSE))
+
+load('sim_coxlasso_scen12_n100_p50.RData')
+tabs1uncens.coxlasso.n100= data.frame(method='Cox LASSO',n=100,correctselLASSO(simout1,p=50,active=1:2,uncens=TRUE))
+tabs1cens.coxlasso.n100= data.frame(method='Cox LASSO',n=100,correctselLASSO(simout1,p=50,active=1:2,uncens=FALSE))
+tabs2uncens.coxlasso.n100= data.frame(method='Cox LASSO',n=100,correctselLASSO(simout2,p=50,active=1:2,uncens=TRUE))
+tabs2cens.coxlasso.n100= data.frame(method='Cox LASSO',n=100,correctselLASSO(simout2,p=50,active=1:2,uncens=FALSE))
+load('sim_coxlasso_scen12_n500_p50.RData')
+tabs1uncens.coxlasso.n500= data.frame(method='Cox LASSO',n=500,correctselLASSO(simout1,p=50,active=1:2,uncens=TRUE))
+tabs1cens.coxlasso.n500= data.frame(method='Cox LASSO',n=500,correctselLASSO(simout1,p=50,active=1:2,uncens=FALSE))
+tabs2uncens.coxlasso.n500= data.frame(method='Cox LASSO',n=500,correctselLASSO(simout2,p=50,active=1:2,uncens=TRUE))
+tabs2cens.coxlasso.n500= data.frame(method='Cox LASSO',n=500,correctselLASSO(simout2,p=50,active=1:2,uncens=FALSE))
+
+
+tabs1uncens= rbind(tabs1uncens.n100,tabs1uncens.n500,tabs1uncens.gzell.n100,tabs1uncens.gzell.n500,tabs1uncens.coximom.n100,tabs1uncens.coximom.n500,tabs1uncens.aftlasso.n100,tabs1uncens.aftlasso.n500,tabs1uncens.coxlasso.n100,tabs1uncens.coxlasso.n500)
+
+tabs1cens= rbind(tabs1cens.n100,tabs1cens.n500,tabs1cens.gzell.n100,tabs1cens.gzell.n500,tabs1cens.coximom.n100,tabs1cens.coximom.n500,tabs1cens.aftlasso.n100,tabs1cens.aftlasso.n500,tabs1cens.coxlasso.n100,tabs1cens.coxlasso.n500)
+
+tabs2uncens= rbind(tabs2uncens.n100,tabs2uncens.n500,tabs2uncens.gzell.n100,tabs2uncens.gzell.n500,tabs2uncens.coximom.n100,tabs2uncens.coximom.n500,tabs2uncens.aftlasso.n100,tabs2uncens.aftlasso.n500,tabs2uncens.coxlasso.n100,tabs2uncens.coxlasso.n500)
+
+tabs2cens= rbind(tabs2cens.n100,tabs2cens.n500,tabs2cens.gzell.n100,tabs2cens.gzell.n500,tabs2cens.coximom.n100,tabs2cens.coximom.n500,tabs2cens.aftlasso.n100,tabs2cens.aftlasso.n500,tabs2cens.coxlasso.n100,tabs2cens.coxlasso.n500)
+
+xtable(tabs1cens,digits=c(0,0,0,3,3,2,2))
+xtable(tabs2cens,digits=c(0,0,0,3,3,2,2))
+
+## PLOT PROPORTION OF CORRECT MODEL SELECTIONS
+
+#Scenario 1, p=50, with censoring
+par(mar=c(4,4.5,.3,.3))
+tab= tabs1cens
+col= c('black','black','black','gray','darkgray'); lty= c(1,3,2,1,3); pch= c(1,2,3,2,1)
+sel= (tab$method=='AFT pMOMZ')
+plot(tab$n[sel],tab[sel,'correct.model'],type='l',xlab='n',ylab='Proportion of correct model selections',cex.lab=1.3,cex.axis=1.3,ylim=c(0,1),col=col[1],lty=lty[1])
+points(tab$n[sel],tab[sel,'correct.model'],col=col[1],pch=pch[1])
+sel= (tab$method=='AFT Zellner'); lines(tab$n[sel],tab[sel,'correct.model'],col=col[2],lty=lty[2]); points(tab$n[sel],tab[sel,'correct.model'],col=col[2],pch=pch[2])
+sel= (tab$method=='Cox iMOM'); lines(tab$n[sel],tab[sel,'correct.model'],col=col[3],lty=lty[3]); points(tab$n[sel],tab[sel,'correct.model'],col=col[3],pch=pch[3])
+sel= (tab$method=='AFT LASSO'); lines(tab$n[sel],tab[sel,'correct.model'],col=col[4],lty=lty[4]); points(tab$n[sel],tab[sel,'correct.model'],col=col[4],pch=pch[4])
+sel= (tab$method=='Cox LASSO'); lines(tab$n[sel],tab[sel,'correct.model'],col=col[5],lty=lty[5]); points(tab$n[sel],tab[sel,'correct.model'],col=col[5],pch=pch[5])
+legend('topleft',c('AFT pMOMZ','AFT Zellner','Cox iMOM','AFT LASSO','Cox LASSO'),col=col,lty=lty,pch=pch,cex=1.3)
+
+#Scenario 2, p=50, with censoring
+par(mar=c(4,4.5,.3,.3))
+tab= tabs2cens
+col= c('black','black','black','gray','darkgray'); lty= c(1,3,2,1,3); pch= c(1,2,3,2,1)
+sel= (tab$method=='AFT pMOMZ')
+plot(tab$n[sel],tab[sel,'correct.model'],type='l',xlab='n',ylab='Proportion of correct model selections',cex.lab=1.3,cex.axis=1.3,ylim=c(0,1),col=col[1],lty=lty[1])
+points(tab$n[sel],tab[sel,'correct.model'],col=col[1],pch=pch[1])
+sel= (tab$method=='AFT Zellner'); lines(tab$n[sel],tab[sel,'correct.model'],col=col[2],lty=lty[2]); points(tab$n[sel],tab[sel,'correct.model'],col=col[2],pch=pch[2])
+sel= (tab$method=='Cox iMOM'); lines(tab$n[sel],tab[sel,'correct.model'],col=col[3],lty=lty[3]); points(tab$n[sel],tab[sel,'correct.model'],col=col[3],pch=pch[3])
+sel= (tab$method=='AFT LASSO'); lines(tab$n[sel],tab[sel,'correct.model'],col=col[4],lty=lty[4]); points(tab$n[sel],tab[sel,'correct.model'],col=col[4],pch=pch[4])
+sel= (tab$method=='Cox LASSO'); lines(tab$n[sel],tab[sel,'correct.model'],col=col[5],lty=lty[5]); points(tab$n[sel],tab[sel,'correct.model'],col=col[5],pch=pch[5])
+legend('topleft',c('AFT pMOMZ','AFT Zellner','Cox iMOM','AFT LASSO','Cox LASSO'),col=col,lty=lty,pch=pch,cex=1.3)
+
+#Scenario 1, p=50, uncensored data
+par(mar=c(4,4.5,.3,.3))
+tab= tabs1uncens
+col= c('black','black','black','gray','darkgray'); lty= c(1,3,2,1,3); pch= c(1,2,3,2,1)
+sel= (tab$method=='AFT pMOMZ')
+plot(tab$n[sel],tab[sel,'correct.model'],type='l',xlab='n',ylab='Proportion of correct model selections',cex.lab=1.3,cex.axis=1.3,ylim=c(0,1),col=col[1],lty=lty[1])
+points(tab$n[sel],tab[sel,'correct.model'],col=col[1],pch=pch[1])
+sel= (tab$method=='AFT Zellner'); lines(tab$n[sel],tab[sel,'correct.model'],col=col[2],lty=lty[2]); points(tab$n[sel],tab[sel,'correct.model'],col=col[2],pch=pch[2])
+sel= (tab$method=='Cox iMOM'); lines(tab$n[sel],tab[sel,'correct.model'],col=col[3],lty=lty[3]); points(tab$n[sel],tab[sel,'correct.model'],col=col[3],pch=pch[3])
+sel= (tab$method=='AFT LASSO'); lines(tab$n[sel],tab[sel,'correct.model'],col=col[4],lty=lty[4]); points(tab$n[sel],tab[sel,'correct.model'],col=col[4],pch=pch[4])
+sel= (tab$method=='Cox LASSO'); lines(tab$n[sel],tab[sel,'correct.model'],col=col[5],lty=lty[5]); points(tab$n[sel],tab[sel,'correct.model'],col=col[5],pch=pch[5])
+legend('topleft',c('AFT pMOMZ','AFT Zellner','Cox iMOM','AFT LASSO','Cox LASSO'),col=col,lty=lty,pch=pch,cex=1.3)
+
+#Scenario 2, p=50, uncensored data
+par(mar=c(4,4.5,.3,.3))
+tab= tabs2uncens
+col= c('black','black','black','gray','darkgray'); lty= c(1,3,2,1,3); pch= c(1,2,3,2,1)
+sel= (tab$method=='AFT pMOMZ')
+plot(tab$n[sel],tab[sel,'correct.model'],type='l',xlab='n',ylab='Proportion of correct model selections',cex.lab=1.3,cex.axis=1.3,ylim=c(0,1),col=col[1],lty=lty[1])
+points(tab$n[sel],tab[sel,'correct.model'],col=col[1],pch=pch[1])
+sel= (tab$method=='AFT Zellner'); lines(tab$n[sel],tab[sel,'correct.model'],col=col[2],lty=lty[2]); points(tab$n[sel],tab[sel,'correct.model'],col=col[2],pch=pch[2])
+sel= (tab$method=='Cox iMOM'); lines(tab$n[sel],tab[sel,'correct.model'],col=col[3],lty=lty[3]); points(tab$n[sel],tab[sel,'correct.model'],col=col[3],pch=pch[3])
+sel= (tab$method=='AFT LASSO'); lines(tab$n[sel],tab[sel,'correct.model'],col=col[4],lty=lty[4]); points(tab$n[sel],tab[sel,'correct.model'],col=col[4],pch=pch[4])
+sel= (tab$method=='Cox LASSO'); lines(tab$n[sel],tab[sel,'correct.model'],col=col[5],lty=lty[5]); points(tab$n[sel],tab[sel,'correct.model'],col=col[5],pch=pch[5])
+legend('topleft',c('AFT pMOMZ','AFT Zellner','Cox iMOM','AFT LASSO','Cox LASSO'),col=col,lty=lty,pch=pch,cex=1.3)
+
+
+## PLOT MARGINAL POSTERIOR INCLUSION PROBABILITIES
+load('sim_scen12_n100_p50.RData')
+tabs1.n100= data.frame(margppmombf(simout1,p=50,active=1:2),method='AFT pMOMZ',n=100)
+tabs2.n100= data.frame(margppmombf(simout2,p=50,active=1:2),method='AFT pMOMZ',n=100)
+load('sim_scen12_n500_p50.RData')
+tabs1.n500= data.frame(margppmombf(simout1,p=50,active=1:2),method='AFT pMOMZ',n=500)
+tabs2.n500= data.frame(margppmombf(simout2,p=50,active=1:2),method='AFT pMOMZ',n=500)
+
+load('sim_scen12_gzell_n100_p50.RData')
+tabs1.gzell.n100= data.frame(margppmombf(simout1,p=50,active=1:2),method='AFT Zellner',n=100)
+tabs2.gzell.n100= data.frame(margppmombf(simout2,p=50,active=1:2),method='AFT Zellner',n=500)
+load('sim_scen12_gzell_n500_p50.RData')
+tabs1.gzell.n500= data.frame(margppmombf(simout1,p=50,active=1:2),method='AFT Zellner',n=100)
+tabs2.gzell.n500= data.frame(margppmombf(simout2,p=50,active=1:2),method='AFT Zellner',n=500)
+
+load('sim_coximom_scen12_n100_p50.RData')
+tabs1.coximom.n100= data.frame(margppCoxiMOM(simout1,p=50,active=1:2),method='CoxiMOM',n=100)
+tabs2.coximom.n100= data.frame(margppCoxiMOM(simout2,p=50,active=1:2),method='CoxiMOM',n=100)
+load('sim_coximom_scen12_n500_p50.RData')
+tabs1.coximom.n500= data.frame(margppCoxiMOM(simout1,p=50,active=1:2),method='CoxiMOM',n=500)
+tabs2.coximom.n500= data.frame(margppCoxiMOM(simout2,p=50,active=1:2),method='CoxiMOM',n=500)
+
+
+par(mar=c(2,4.5,.3,.3))
+plot(tabs1.n100[,'No.censoring'],type='l',ylim=c(0,1),xaxt='n',ylab='Average marginal posterior inclusion probability',xlab='', cex=1.3)
+axis(1,at=1:6,labels=c('X1','X2','S1','S2','X3-X50','S3-S50'))
+lines(tabs1.gzell.n100[,'No.censoring'],lty=2)
+lines(tabs1.coximom.n100[,'uncensored'],col='gray')
+legend('topright',c('AFT pMOMZ','AFT Zellner','Cox iMOM'),lty=c(1,2,1),col=c(1,1,'gray'),cex=1.3)
+
+par(mar=c(2,4.5,.3,.3))
+plot(tabs1.n100[,'Censoring'],type='l',ylim=c(0,1),xaxt='n',ylab='Average marginal posterior inclusion probability',xlab='', cex=1.3)
+axis(1,at=1:6,labels=c('X1','X2','S1','S2','X3-X50','S3-S50'))
+lines(tabs1.gzell.n100[,'Censoring'],lty=2)
+lines(tabs1.coximom.n100[,'censored'],col='gray')
+legend('topright',c('AFT pMOMZ','AFT Zellner','Cox iMOM'),lty=c(1,2,1),col=c(1,1,'gray'),cex=1.3)
+
+par(mar=c(2,4.5,.3,.3))
+plot(tabs1.n500[,'No.censoring'],type='l',ylim=c(0,1),xaxt='n',ylab='Average marginal posterior inclusion probability',xlab='', cex=1.3)
+axis(1,at=1:6,labels=c('X1','X2','S1','S2','X3-X50','S3-S50'))
+lines(tabs1.gzell.n500[,'No.censoring'],lty=2)
+lines(tabs1.coximom.n500[,'uncensored'],col='gray')
+legend('topright',c('AFT pMOMZ','AFT Zellner','Cox iMOM'),lty=c(1,2,1),col=c(1,1,'gray'),cex=1.3)
+
+par(mar=c(2,4.5,.3,.3))
+plot(tabs1.n500[,'Censoring'],type='l',ylim=c(0,1),xaxt='n',ylab='Average marginal posterior inclusion probability',xlab='', cex=1.3)
+axis(1,at=1:6,labels=c('X1','X2','S1','S2','X3-X50','S3-S50'))
+lines(tabs1.gzell.n500[,'Censoring'],lty=2)
+lines(tabs1.coximom.n500[,'censored'],col='gray')
+legend('topright',c('AFT pMOMZ','AFT Zellner','Cox iMOM'),lty=c(1,2,1),col=c(1,1,'gray'),cex=1.3)
+
+
+par(mar=c(2,4.5,.3,.3))
+plot(tabs2.n100[,'No.censoring'],type='l',ylim=c(0,1),xaxt='n',ylab='Average marginal posterior inclusion probability',xlab='', cex=1.3)
+axis(1,at=1:6,labels=c('X1','X2','S1','S2','X3-X50','S3-S50'))
+lines(tabs2.gzell.n100[,'No.censoring'],lty=2)
+lines(tabs2.coximom.n100[,'uncensored'],col='gray')
+legend('topright',c('AFT pMOMZ','AFT Zellner','Cox iMOM'),lty=c(1,2,1),col=c(1,1,'gray'),cex=1.3)
+
+
+par(mar=c(2,4.5,.3,.3))
+plot(tabs2.n100[,'Censoring'],type='l',ylim=c(0,1),xaxt='n',ylab='Average marginal posterior inclusion probability',xlab='', cex=1.3)
+axis(1,at=1:6,labels=c('X1','X2','S1','S2','X3-X50','S3-S50'))
+lines(tabs2.gzell.n100[,'Censoring'],lty=2)
+lines(tabs2.coximom.n100[,'censored'],col='gray')
+legend('topright',c('AFT pMOMZ','AFT Zellner','Cox iMOM'),lty=c(1,2,1),col=c(1,1,'gray'),cex=1.3)
+
+
+par(mar=c(2,4.5,.3,.3))
+plot(tabs2.n500[,'No.censoring'],type='l',ylim=c(0,1),xaxt='n',ylab='Average marginal posterior inclusion probability',xlab='', cex=1.3)
+axis(1,at=1:6,labels=c('X1','X2','S1','S2','X3-X50','S3-S50'))
+lines(tabs2.gzell.n500[,'No.censoring'],lty=2)
+lines(tabs2.coximom.n500[,'uncensored'],col='gray')
+legend('topright',c('AFT pMOMZ','AFT Zellner','Cox iMOM'),lty=c(1,2,1),col=c(1,1,'gray'),cex=1.3)
+
+
+par(mar=c(2,4.5,.3,.3))
+plot(tabs2.n500[,'Censoring'],type='l',ylim=c(0,1),xaxt='n',ylab='Average marginal posterior inclusion probability',xlab='', cex=1.3)
+axis(1,at=1:6,labels=c('X1','X2','S1','S2','X3-X50','S3-S50'))
+lines(tabs2.gzell.n500[,'Censoring'],lty=2)
+lines(tabs2.coximom.n500[,'censored'],col='gray')
+legend('topright',c('AFT pMOMZ','AFT Zellner','Cox iMOM'),lty=c(1,2,1),col=c(1,1,'gray'),cex=1.3)
+
+
+####################################################################################################
+## SIMULATION SCENARIOS 1-2. ASYMMETRIC LAPLACE ERRORS. p=50
+####################################################################################################
+
+beta= c(1/3,1/2,rep(0,48)); sigmae = 0.5; corr=0.5; censtimes1=.5; censtimes2= 1
+
+#Simulations for n=100
+simout1= mclapply(1:100, function(i) simScenarioWithSpur(i,beta=beta,n=100,sigmae=sigmae,corr=corr,censtimes=censtimes1,scenario=1,errors='laplace',asym=-0.5),mc.preschedule=FALSE,mc.cores=6)
+simout2= mclapply(1:100, function(i) simScenarioWithSpur(i,beta=beta,n=100,sigmae=sigmae,corr=corr,censtimes=censtimes2,scenario=2,errors='laplace',asym=-0.5),mc.preschedule=FALSE,mc.cores=6)
+save(simout1, simout2, file='sim_scen12_n100_p50_alaplace.RData')
+
+#Simulations for n=500
+simout1= mclapply(1:100, function(i) simScenarioWithSpur(i,beta=beta,n=500,sigmae=sigmae,corr=corr,censtimes=censtimes1,scenario=1,errors='laplace',asym=-0.5),mc.preschedule=FALSE,mc.cores=6)
+simout2= mclapply(1:100, function(i) simScenarioWithSpur(i,beta=beta,n=500,sigmae=sigmae,corr=corr,censtimes=censtimes2,scenario=2,errors='laplace',asym=-0.5),mc.preschedule=FALSE,mc.cores=6)
+save(simout1, simout2, file='sim_scen12_n500_p50_alaplace.RData')
+
+
+load('sim_scen12_n100_p50_alaplace.RData')
+margpp.scen1= Reduce("+",lapply(simout1,function(z) z$margpp)) / length(simout1)
+sel= rownames(margpp.scen1) %in% c('X[, 1]','X[, 2]','X[, 1].spline','X[, 2].spline')
+spurlinear= rownames(margpp.scen1) %in% paste('X[, ',3:50,']',sep='')
+spurspline= rownames(margpp.scen1) %in% paste('X[, ',3:50,'].spline',sep='')
+tab.scen1.n100= rbind(margpp.scen1[sel,], colMeans(margpp.scen1[spurlinear,]), colMeans(margpp.scen1[spurspline,]))
+rownames(tab.scen1.n100)[5:6]= c('spur.linear','spur.spline')
+#
+simout2= simout2[!sapply(simout2,function(z) any(is.na(z$margpp)))]
+margpp.scen2= Reduce("+",lapply(simout2,function(z) z$margpp)) / length(simout2)
+sel= rownames(margpp.scen2) %in% c('X[, 1]','X[, 2]','X[, 1].spline','X[, 2].spline')
+spurlinear= rownames(margpp.scen2) %in% paste('X[, ',3:50,']',sep='')
+spurspline= rownames(margpp.scen2) %in% paste('X[, ',3:50,'].spline',sep='')
+tab.scen2.n100= rbind(margpp.scen2[sel,], colMeans(margpp.scen2[spurlinear,]), colMeans(margpp.scen2[spurspline,]))
+rownames(tab.scen2.n100)[5:6]= c('spur.linear','spur.spline')
+
+load('sim_scen12_n500_p50_alaplace.RData')
+margpp.scen1= Reduce("+",lapply(simout1,function(z) z$margpp)) / length(simout1)
+sel= rownames(margpp.scen1) %in% c('X[, 1]','X[, 2]','X[, 1].spline','X[, 2].spline')
+spurlinear= rownames(margpp.scen1) %in% paste('X[, ',3:50,']',sep='')
+spurspline= rownames(margpp.scen1) %in% paste('X[, ',3:50,'].spline',sep='')
+tab.scen1.n500= rbind(margpp.scen1[sel,], colMeans(margpp.scen1[spurlinear,]), colMeans(margpp.scen1[spurspline,]))
+rownames(tab.scen1.n500)[5:6]= c('spur.linear','spur.spline')
+#
+simout2= simout2[!sapply(simout2,function(z) any(is.na(z$margpp)))]
+margpp.scen2= Reduce("+",lapply(simout2,function(z) z$margpp)) / length(simout2)
+sel= rownames(margpp.scen2) %in% c('X[, 1]','X[, 2]','X[, 1].spline','X[, 2].spline')
+spurlinear= rownames(margpp.scen2) %in% paste('X[, ',3:50,']',sep='')
+spurspline= rownames(margpp.scen2) %in% paste('X[, ',3:50,'].spline',sep='')
+tab.scen2.n500= rbind(margpp.scen2[sel,], colMeans(margpp.scen2[spurlinear,]), colMeans(margpp.scen2[spurspline,]))
+rownames(tab.scen2.n500)[5:6]= c('spur.linear','spur.spline')
+
+
+tab.scen1= cbind(tab.scen1.n100[,'No censoring'], tab.scen1.n500[,'No censoring'], tab.scen1.n100[,'Censoring'], tab.scen1.n500[,'Censoring'])
+colnames(tab.scen1)= c('No cens, n=100','No cens, n=500','Cens, n=100','Cens, n=500')
+xtable(tab.scen1,digits=c(0,3,3,3,3))
+
+
+tab.scen2= cbind(tab.scen2.n100[,'No censoring'], tab.scen2.n500[,'No censoring'], tab.scen2.n100[,'Censoring'], tab.scen2.n500[,'Censoring'])
+colnames(tab.scen2)= c('No cens, n=100','No cens, n=500','Cens, n=100','Cens, n=500')
+xtable(tab.scen2,digits=c(0,3,3,3,3))
+
+
+
