@@ -1,0 +1,179 @@
+---
+title: "flchain data analysis"
+author: "David Rossell and Francisco Rubio"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+    number_sections: true
+    df_print: paged
+---
+
+
+We load R packages and a file `functions.R` containing auxiliary functions.
+
+```{r,message=FALSE}
+library(survival)
+library(devtools)
+install_github("davidrusi/mombf")
+library(mombf)
+library(Biobase)
+package.version("mombf")
+```
+
+We load the `flchain` data set from the R package `survival`. This data set contains a stratified random sample containing half of the subjects from a study of the relationship between serum free light chain (FLC) and mortality. Only complete cases are analyzed.
+The response variable is the number of days from enrollment until death. Note that there are 3 subjects whose sample was obtained on their death date (`futime`).
+We consider the following 5 covariates: `sex` (0 - Female, 1 - Male), serum free light chain kappa portion (`kappa`), serum free light chain lambda portion (`lambda`), serum creatinine (`creatinine`), diagnosed with monoclonal gammapothy (`mgus`, 0-1).
+The variable `age` is left-truncated at age 50. Thus, we do not include this variable in our selection as this dataset only includes persons from an advanced age group.
+For further information type `help(flchain)`.
+We scale the response variable by 365.25, so that survival times are measured in years, and the continuous covariates to zero mean and unit variance.
+
+```{r}
+# flchain data set
+data(flchain)
+head(flchain)
+# Complete cases of the variables of interest
+data.c <- flchain[,c(2,4,5,7,8,9,10)]
+data.c <- data.c[complete.cases(data.c),]
+dim(data.c)
+head(data.c)
+# Assiging half-day survival to the zero-survivors
+data.c$futime <- ifelse(data.c$futime==0,0.5,data.c$futime)
+y= Surv(log(data.c$futime/365.25), data.c$death)
+data.c$kappa <- scale(data.c$kappa) # scaled kappa
+data.c$creatinine <- scale(data.c$creatinine) # scaled creatinine 
+data.c$sex <- as.numeric(data.c$sex)-1 # sex 0-1
+X= data.c[,-c(6,7)];  # Design matrix
+dim(X)
+```
+
+The dataset has $n=6,524$ observations, $n_o=1,962$ individuals died during the follow-up period while $n_c=4,562$ where alive at the last contact date. The following plot shows the Kaplan-Meier estimator of the survival function.
+
+```{r}
+km <- survfit(Surv(futime/365.25, death) ~ 1, data = data.c)
+plot(km, xlab = "Years", ylab = "Survival", main = "Kaplan-Meier estimator",
+     cex.axis = 1.5, cex.lab = 1.5)
+```
+
+# BAYESIAN MODEL SELECTION
+
+## Linear regression
+In this section, we run Bayesian model selection under the block Zellner's priors considering only linear effects (the dispersion is parameterized as tau=$n g_N$, hence the default $g_N=1$ corresponds to tau=$n$) and a Beta-Binomial(1,1) prior on the models. We use option enumerate=TRUE to force full model enumeration (alternatively it uses Gibbs sampling, the obtained results are very similar either way). The task finishes quickly, in less than 1 second. 
+```{r}
+# Regression formula with linear effects
+f1= ~  sex + kappa + lambda + creatinine +  mgus 
+f1y= y ~ sex + kappa + lambda + creatinine +  mgus 
+X= model.matrix(f1, data=data.c)
+
+# BMS
+priorCoef= zellnerprior(tau=nrow(data.c))
+priorGroup= zellnerprior(tau=nrow(data.c))
+priorDelta= modelbbprior(1,1)
+ms.z <- modelSelection(f1y,data=data.c,
+                       priorCoef=priorCoef,priorGroup=priorGroup,priorDelta=priorDelta,
+                       enumerate=TRUE, method='Laplace')
+```
+
+The top model has posterior probability 0.69 and it includes 2 variables (`kappa` and `lambda`), with marginal posterior inclusion probabilities 1 and 0.833 respectively. This is as predicted by theory, when $n$ is large posterior probabilities should concentrate on the optimal model. The model identifier indicates what columns in $X$ are selected.
+
+```{r}
+pp.z= postProb(ms.z)
+head(pp.z)
+```
+
+
+```{r}
+ms.z$margpp
+```
+
+## Non-linear regression
+In this section, we consider BMS with non-linear effects over all continuous variables and under block Zellner's priors. 
+```{r}
+priorCoef= zellnerprior(tau=nrow(X))
+priorGroup= groupzellnerprior(tau=nrow(X))
+priorDelta= modelbbprior(1,1)
+system.time(ms.zn <- modelSelection(y~ sex + kappa + lambda + creatinine + mgus,
+                                    smooth=~ kappa + lambda + creatinine, data=data.c, 
+                                    priorCoef=priorCoef,priorGroup=priorGroup,priorDelta=priorDelta,
+                                    enumerate=TRUE, method='Laplace'))
+```
+
+The top model contains again kappa and lambda, but also a non-linear effect of kappa (columns labelled kappa.s, for "smooth"), a non-linear effect of creatinine that was missed by the linear model (columns creatinine.s), and the variable gender. The marginal inclusion probabilities are all $>0.95$, except for gender which is close to 0.5.
+```{r}
+pp.zn= postProb(ms.zn)
+head(pp.zn)
+```
+
+
+```{r}
+ms.zn$margpp
+```
+
+
+# COMPARISON TO FREQUENTIST AFT MODELS
+We fit Accelerated Failure Time (AFT) models with `lognormal` baseline hazard, via maximum likelihood estimation, for the model with all variables (linear effects), as well as the top models obtained from selecting (i) linear effects, (ii) non-linear effects (using the command `bs()` from the R package `splines`). We note that AIC favours the model containing non-linear effects.
+```{r}
+library(splines)
+# AFT model using a lognormal baseline distribution and all variables (linear model)
+fit.aft <- survreg(formula = Surv(futime/365.25, death) ~ sex + kappa + lambda + creatinine + mgus, 
+                     data = data.c, dist = "lognormal")
+
+summary(fit.aft)
+```
+
+
+```{r}
+# AFT model using a lognormal baseline distribution and selected variables (linear model)
+fit.aft.l <- survreg(formula = Surv(futime/365.25, death) ~  kappa + lambda, 
+                     data = data.c, dist = "lognormal")
+
+summary(fit.aft.l)
+```
+
+
+```{r}
+fit.aft.n <- survreg(formula = Surv(futime/365.25, death) ~ lambda + bs(kappa,df=5) + bs(creatinine,df=5), 
+                     data = data.c, dist = "lognormal")
+
+summary(fit.aft.n)
+```
+
+
+```{r}
+# AIC
+AIC(fit.aft)
+AIC(fit.aft.l)
+AIC(fit.aft.n)
+```
+
+
+## ANALYSIS OF THE ESTIMATED MEDIAN SURVIVAL TIMES 
+We now compare the estimated survival under the models selected when considering linear and non-linear effects. 
+```{r} 
+# Median survival times obtained with the linear model 
+predl <- predict(fit.aft.l, type='quantile', p=0.25) 
+
+# Median survival times obtained with the non-linear model 
+predn <- predict(fit.aft.n, type='quantile', p=0.25)
+```
+
+There are non-negligible differences between these estimates, that is considering non-linear effects had a practical impact.
+```{r} 
+plot(predl, predn, xlab = "Predicted 0.75 survival quantile in years (linear model)", ylab = "Predicted 0.75 survival quantile in years (non-linear model)", 
+cex.axis = 1.5, cex.lab = 1.4, pch='.')
+abline(a = 0, b= 1, lwd = 2)
+```
+
+As further illustration we plot the average estimated 0.75 survival quantile as a function of kappa under the linear and non-linear models. The non-linear model suggests a stronger effect than the linear model, in the sense that for small values of kappa it predicts a relatively higher survival, whereas for large values of kappe it predicts lower survival.
+
+```{r}
+qkappa= quantile(data.c$kappa, probs=c(.1,.9))
+kappar= cut(data.c$kappa, breaks= c(-Inf,seq(qkappa[1],qkappa[2],length=10),Inf))
+meankappa= tapply(data.c$kappa, INDEX=kappar, FUN=mean)
+meanpredn= tapply(predn, INDEX=kappar, FUN=mean)
+meanpredl= tapply(predl, INDEX=kappar, FUN=mean)
+plot(meankappa, meanpredn, type='l', xlab='kappa', ylab='Predicted survival (0.25 quantile)', cex.axis=1.4, cex.lab=1.4)
+lines(meankappa, meanpredl, col='black', lty = 2, lwd=2)
+legend('topright', c('Linear','Non-linear'), col=c('black','black'), lwd=c(2,2), lty = c(1,2), cex=1.4)
+```
+
