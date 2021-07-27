@@ -1,1 +1,7 @@
-This folder contains R code to reproduce the examples in Rossell & Zwiernik (2021), Dependence in elliptical partial correlation graphs. The paper is available at https://arxiv.org/abs/2004.13779
+This folder contains R code to reproduce the examples in Rossell & Zwiernik (2021), Dependence in elliptical partial correlation graphs. 
+
+The paper is available at https://arxiv.org/abs/2004.13779
+
+- examples.R: R code to reproduce the SP500 data analysis
+
+- sp500.RData: SP500 dataset stored in .RData format. It can be loaded from R using load("sp500.RData")
