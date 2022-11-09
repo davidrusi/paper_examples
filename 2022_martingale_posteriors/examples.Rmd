@@ -1,0 +1,178 @@
+---
+title: "Martingale posteriors. Inspecting the prior"
+author: "David Rossell"
+date: "2022-11-09"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache = FALSE)
+```
+
+# Bernoulli example
+
+We wish to estimate the expectation $E(Y_i)$ where $Y_i \sim Bern(\theta)$ independently across $i$, given the observed values $y_1,\ldots,y_n$.
+
+## Define auxiliary functions
+
+We start by defining the function `thetafun` that computes $\theta$ given $y=(y_1,\ldots,y_n,y_{n+1},\ldots,y_{n+N})$, where $(y_{n+1},\ldots,y_{n+N})$ are posterior predictive draws given $y_1,\ldots,y_n$.
+
+```{r}
+thetafun= function(y) mean(y)
+```
+
+We next define a function `postpred` that obtains `npost` posterior draws from $\pi(\theta \mid y_1,\ldots,y_n)$. This is achieved by producing, for each desired posterior draw, a posterior predictive sample of size $N$ (argument `npred`). The posterior predictive sample is obtained from the Dirichlet-bootstrap posterior predictive.
+
+```{r}
+postpred= function(y, npred, npost, thetafun) {
+    #Obtain npost posterior samples using npred samples from the Dirichlet-bootstrap posterior predictive
+    # - y: observed data
+    # - npred: number of observations from posterior predictive
+    # - npost: number of posterior samples
+    # - thetafun: function that returns theta given (y, ypred)
+    require(VGAM)
+    n= length(y)
+    theta= matrix(NA, nrow=npost, ncol=1)
+    for (i in 1:npost) {
+        w= rdiric(1, shape=rep(1,n))
+        ypred= sample(y, size=npred, replace=TRUE, prob=w)
+        theta[i]= thetafun(c(y,ypred))
+        if ((i %% 1000)==0) cat('.')
+    }
+    return(theta)
+}
+```
+
+Finally, we define a function to evaluate the Bernoulli likelihood function at $\theta$ given $y_1,\ldots,y_n$.
+
+```{r}
+lhood= function(theta, y, logscale=TRUE) {
+    ans= double(length(theta))
+    for (i in 1:length(theta)) ans[i]= sum(dbinom(y, size=1, prob=theta[i], log=logscale))
+    return(ans)
+}
+```
+
+
+## A simulated dataset
+
+We consider a moderately large sample size $n=100$ and setting where truly $\theta=0.5$. We obtain 100,000 posterior samples, each based on a posterior predictive sample of size $N=10,000$. We set the random number generator seed to that our results are reproducible.
+
+```{r, message=FALSE}
+set.seed(1)
+n= 100; theta=0.5; npred= 10^4; npost= 10^5
+y= (runif(n)<theta)
+theta= postpred(y=y, npred=npred, npost=npost, thetafun=thetafun)
+```
+
+We next evaluate the likelihood on a grid of $\theta$ values, as well as the estimated posterior density. To obtain the latter we use a Kernel density estimator in function `pvaldens` of R package `bootruin` (it is based on Beta kernels, since the posterior support is [0,1]).
+
+```{r}
+library(bootruin)
+binwidth= 0.002
+thmin= 0.25; thmax= 0.75
+thgrid= seq(thmin + 0.5*binwidth, thmax - 0.5*binwidth, by=binwidth)
+thlhood= lhood(thgrid, y=y, logscale=TRUE)
+```
+
+```{r}
+posteriorfun= pvaldens(theta,method='chen')
+thpost= double(length(thgrid))
+for (i in 1:length(thpost)) thpost[i]= posteriorfun(thgrid[i])
+```
+
+Finally, we estimate the prior $\pi(\theta) \propto \pi(\theta \mid y_1,\ldots,y_n) / p(y_1,\ldots,y_n \mid \theta)$, where $p(y_1,\ldots,y_n \mid \theta)$ is the likelihood function.
+
+```{r}
+thprior= thpost / exp(thlhood)
+```
+
+The estimated prior density might be inaccurate for values of $\theta$ where the estimated posterior is near-zero, to avoid such issues we focus on $\theta$ values with estimated posterior density above a 0.001 threshold.
+
+```{r}
+sel= (thpost > 0.001)
+thpost= thpost[sel]
+thprior= thprior[sel]
+thlhood= thlhood[sel]
+thgrid= thgrid[sel]
+```
+
+Finally, for plotting purposes we re-normalize the posterior and prior densities to add to 1 over the grid values, and we re-scale the likelihood function to match the maximum height of the posterior density.
+
+```{r}
+thpost= thpost/sum(thpost)
+thprior= thprior/sum(thprior)
+thlhood= exp(thlhood)*max(thpost)/max(exp(thlhood))
+```
+
+```{r}
+plot(thgrid, thpost, type='l', xlab=expression(theta), ylab='Posterior density', cex.lab=1.3, cex.axis=1.3)
+lines(thgrid, thlhood, col='gray', lwd=2)
+lines(thgrid, thprior, lty=2)
+legend('topright', c('Posterior','Likelihood','Prior'), col=c(1,'gray',1), lty=c(1,1,2), cex=1.3)
+```
+
+# Gaussian example
+
+We wish to estimate the expectation $E(Y_i)$ where $Y_i \sim N(\theta,1)$ independently across $i$, given the observed values $y_1,\ldots,y_n$.
+
+## Define auxiliary functions
+
+Analogously to Section 1, we define the likelihood function `lhood` (functions `thetafun`, `postpred` remain the same as in Section 1).
+
+```{r}
+thetafun= function(y) mean(y)
+```
+
+```{r}
+lhood= function(theta, y, logscale=TRUE) {
+    ans= double(length(theta))
+    for (i in 1:length(theta)) ans[i]= sum(dnorm(y, mean=theta[i], sd=1, log=logscale))
+    return(ans)
+}
+```
+
+
+## A simulated dataset
+
+We simulate a dataset with $n=100$ observations where truly $\theta=5$. We set the random number generator seed to ensure that our results are reproducible.
+
+```{r, message=FALSE}
+set.seed(1)
+n= 100; mu= 5; npred= 10^4; npost= 10^5
+y= rnorm(n, mean=mu)
+theta= postpred(y=y, npred=npred, npost=npost, thetafun=thetafun)
+```
+
+To estimate the posterior density at a grid of $\theta$ values we use the mixture of normals estimator implemented in `densityMclust` (R package `mclust`).
+
+```{r, message=FALSE, fig.show='hide'}
+library(mclust)
+thmin= 4; thmax= 6.5
+th= seq(thmin, thmax, length=200)
+thlhood= lhood(th, y=y, logscale=TRUE)
+d2= densityMclust(theta, plot=FALSE)
+thpost= predict(d2, newdata=th)
+```
+
+We obtain the estimated prior density at a given $\theta$ as being proportional to the ratio of the posterior density at $\theta$ divided by the likelihood at $\theta$.
+
+```{r}
+thprior= thpost / exp(thlhood - max(thlhood))
+```
+
+Finally, for plotting purposes we re-normalize the posterior and prior densities to add to 1 over the grid values, and we re-scale the likelihood function to match the maximum height of the posterior density.
+
+```{r}
+thpost= thpost/sum(thpost)
+thprior= thprior/sum(thprior)
+thlhood= exp(thlhood)*max(thpost)/max(exp(thlhood))
+```
+
+
+```{r}
+plot(th, thpost, type='l', xlab=expression(theta), ylab='Posterior density', cex.lab=1.3, cex.axis=1.3)
+lines(th, thlhood, col='gray', lwd=2)
+lines(th, thprior, lty=2)
+legend('topright', c('Posterior','Likelihood','Prior'), col=c(1,'gray',1), lty=c(1,1,2), cex=1.3)
+```
