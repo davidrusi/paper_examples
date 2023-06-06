@@ -4,6 +4,8 @@ This folder contains R code to reproduce the examples in the paper "Model-based 
 
 - simulation_fda.R: reproduces Section 5.2 "Functional data simulation"
 
+- Directory lfmm: code implementing the LFMM method, obtained from https://doi.org/10.1214/23-BA1383SUPPB. For details about the method see Paulon, Sarkar & Mueller (2023), Bayesian Semiparametric Hidden Markov Tensor Models for Time Varying Random Partitions with Local Variable Selection, Bayesian Analysis. DOI: 10.1214/23-BA1383
+
 - salary.R: reproduces Section 5.3 "Salary gaps versus age"
 
 - salary.RData: dataset used in Section 5.3
