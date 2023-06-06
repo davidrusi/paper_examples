@@ -11,8 +11,7 @@
 library(mombf)
 library(parallel)
 library(tidyverse)
-source('routines.R')
-load("../data/salary.RData")
+load("salary.RData")
 
 #SELECT CASES. AGED 18-65, SINGLE RACE, NON-MILITARY EMPLOYED 35-40H/WEEK
 data= filter(salary, incomewage>=500, age>=18, age<=65, employment=="At work", !(occ %in% c("unemployed/neverworked","military")), hoursworked>=35, hoursworked<=40, wkstat=="Full-time") |>
@@ -29,8 +28,6 @@ x= mutate(x, government= as.numeric(classworker=='Government employee'), selfemp
 
 fit= localnulltest(y, x=x, z=z, x.adjust=x.adjust, nlocalknots=c(10,20), verbose=TRUE)
 b= coef(fit)
-save(fit, b, file="salary_results.RData")
-
 
 b= data.frame(covariate=1:ncol(x), covariaten= names(x)) |>
      right_join(b) |>
@@ -48,7 +45,6 @@ ggplot(b, aes(z1, margpp)) +
     scale_colour_grey() +
     theme_bw() +
     theme(axis.text=element_text(size=textsize), axis.title=element_text(size=textsize), legend.title=element_text(size=textsize), legend.text=element_text(size=textsize), legend.position=c(.83,.2), legend.key.width=unit(5,'cm'), strip.text.x = element_text(size=textsize))
-ggsave("../drafts/figs/salary_pp_localtests.pdf")
 
 textsize= 35
 bsel= filter(b, covariate %in% c('black','female','hispanic','college'))
@@ -58,6 +54,5 @@ ggplot(bsel, aes(z1, estimate)) +
     scale_colour_grey() +
     theme_bw() +
     theme(axis.text=element_text(size=textsize), axis.title=element_text(size=textsize), legend.title=element_text(size=textsize), legend.text=element_text(size=textsize), legend.position=c(.83,.7), legend.key.width=unit(5,'cm'))
-ggsave("../drafts/figs/salary_estimated_effects.pdf")
 
               

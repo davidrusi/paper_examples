@@ -1,0 +1,9 @@
+This folder contains R code to reproduce the examples in the paper "Model-based local variable selection under misspecification" by Rossell et al (2023)
+
+- simulation_iid.R: reproduces Section 5.1 "Simulation with independent errors"
+
+- simulation_fda.R: reproduces Section 5.2 "Functional data simulation"
+
+- salary.R: reproduces Section 5.3 "Salary gaps versus age"
+
+- salary.RData: dataset used in Section 5.3

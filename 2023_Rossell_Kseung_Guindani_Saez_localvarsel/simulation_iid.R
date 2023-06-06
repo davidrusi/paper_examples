@@ -11,8 +11,6 @@ library(tidyverse)
 #devtools::install_github(repo = "skdeshpande91/VCBART/VCBART")
 library(VCBART)
 library(here)
-source(here('code/routines.R'))
-setwd(here('drafts/figs'))
 
 
 
