@@ -1,0 +1,63 @@
+#These data were obtained from the Current Population Survey at https://www.census.gov/programs-surveys/cps.html
+#
+#To use these data you should add a reference to:
+#
+#Flood, Sarah and King, Miriam and Rodgers, Renae and Ruggles, Steven and Warren, J Robert (2020).
+#Integrated Public Use Microdata Series, Current Population Survey: Version 7.0 [dataset]
+#Minneapolis, MN: IPUMS, 10.18128/D030.V7.0
+#
+# See https://cps.ipums.org/cps/citation.shtml for the rules regarding citation and use of the CPS database
+
+library(mombf)
+library(parallel)
+library(tidyverse)
+source('routines.R')
+load("../data/salary.RData")
+
+#SELECT CASES. AGED 18-65, SINGLE RACE, NON-MILITARY EMPLOYED 35-40H/WEEK
+data= filter(salary, incomewage>=500, age>=18, age<=65, employment=="At work", !(occ %in% c("unemployed/neverworked","military")), hoursworked>=35, hoursworked<=40, wkstat=="Full-time") |>
+  mutate(occ= factor(occ), logincome= log10(incomewage), black= ifelse(race=='Black',1,0), college= ifelse(edu=='CG',1,0), classworker=factor(classworker)) |>
+  select(c(logincome, age, female, hispanic, black, college, occ, classworker))
+
+
+y= data$logincome
+z= data$age
+x= data[,c('female','hispanic','black','college','classworker')]
+x.adjust= model.matrix(~ occ, data=data)
+x= mutate(x, government= as.numeric(classworker=='Government employee'), selfemployed= as.numeric(classworker=='Self-employed')) |>
+  select(-classworker)
+
+fit= localnulltest(y, x=x, z=z, x.adjust=x.adjust, nlocalknots=c(10,20), verbose=TRUE)
+b= coef(fit)
+save(fit, b, file="salary_results.RData")
+
+
+b= data.frame(covariate=1:ncol(x), covariaten= names(x)) |>
+     right_join(b) |>
+     select(-covariate) |>
+     rename(covariate= covariaten)
+
+textsize= 35
+mycols= rep(c('black','darkgrey'), ncol(x)/2 + 1)[1:ncol(x)]
+ggplot(b, aes(z1, margpp)) +
+    geom_line() +
+    #geom_line(aes(group=covariate, lty=covariate)) +
+    labs(x='Age (years)', y='Posterior probability of a covariate effect') +
+    facet_wrap( ~ covariate) +
+    ylim(0,1) + 
+    scale_colour_grey() +
+    theme_bw() +
+    theme(axis.text=element_text(size=textsize), axis.title=element_text(size=textsize), legend.title=element_text(size=textsize), legend.text=element_text(size=textsize), legend.position=c(.83,.2), legend.key.width=unit(5,'cm'), strip.text.x = element_text(size=textsize))
+ggsave("../drafts/figs/salary_pp_localtests.pdf")
+
+textsize= 35
+bsel= filter(b, covariate %in% c('black','female','hispanic','college'))
+ggplot(bsel, aes(z1, estimate)) +
+    geom_line(aes(group=covariate, col=covariate, lty=covariate), lwd=2) +
+    labs(x='Age (years)', y='Estimated covariate effect (log10)') +
+    scale_colour_grey() +
+    theme_bw() +
+    theme(axis.text=element_text(size=textsize), axis.title=element_text(size=textsize), legend.title=element_text(size=textsize), legend.text=element_text(size=textsize), legend.position=c(.83,.7), legend.key.width=unit(5,'cm'))
+ggsave("../drafts/figs/salary_estimated_effects.pdf")
+
+              
