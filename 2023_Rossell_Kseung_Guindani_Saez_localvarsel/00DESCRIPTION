@@ -1,4 +1,11 @@
-This folder contains R code to reproduce the examples in the paper "Model-based local variable selection under misspecification" by Rossell et al (2023)
+This folder contains R code to reproduce the examples in the paper "Semi-parametric local variable selection under misspecification" by Rossell et al (2023)
+
+If you just want a quick intro on how to use mombf to do variable selection see
+
+- example.qmd (or its compiled version example.html): an example with independent errors
+- example_fda.qmd (or its .html compiled version): an example with functional data analysis
+
+Regarding reproducing the paper's results,  the relevant files are below:
 
 - simulation_iid.R: reproduces Section 5.1 "Simulation with independent errors"
 
