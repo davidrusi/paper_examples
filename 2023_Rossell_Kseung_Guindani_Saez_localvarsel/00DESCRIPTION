@@ -16,3 +16,7 @@ Regarding reproducing the paper's results,  the relevant files are below:
 - salary.R: reproduces Section 5.3 "Salary gaps versus age"
 
 - salary.RData: dataset used in Section 5.3
+
+- EcoG_analysis.R: reproduces Section 5.4 on the brain activation data of Saez et al.
+
+- ocf3_prewindowed.RData: brain activation dataset
