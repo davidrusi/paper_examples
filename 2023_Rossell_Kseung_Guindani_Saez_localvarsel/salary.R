@@ -55,4 +55,72 @@ ggplot(bsel, aes(z1, estimate)) +
     theme_bw() +
     theme(axis.text=element_text(size=textsize), axis.title=element_text(size=textsize), legend.title=element_text(size=textsize), legend.text=element_text(size=textsize), legend.position=c(.83,.7), legend.key.width=unit(5,'cm'))
 
+
+
+## SET 20 KNOTS ##
+
+fit2= localnulltest(y, x=x, z=z, x.adjust=x.adjust, nbaseknots=20, nlocalknots=20, verbose=TRUE)  #results in low power
+b2= coef(fit2)
+
+b2= data.frame(covariate=1:ncol(x), covariaten= names(x)) |>
+     right_join(b2) |>
+     select(-covariate) |>
+     rename(covariate= covariaten)
+
+textsize= 35
+mycols= rep(c('black','darkgrey'), ncol(x)/2 + 1)[1:ncol(x)]
+ggplot(b2, aes(z1, margpp)) +
+    geom_line() +
+    #geom_line(aes(group=covariate, lty=covariate)) +
+    labs(x='Age (years)', y='Posterior probability of a covariate effect') +
+    facet_wrap( ~ covariate) +
+    ylim(0,1) + 
+    scale_colour_grey() +
+    theme_bw() +
+    theme(axis.text=element_text(size=textsize), axis.title=element_text(size=textsize), legend.title=element_text(size=textsize), legend.text=element_text(size=textsize), legend.position=c(.83,.2), legend.key.width=unit(5,'cm'), strip.text.x = element_text(size=textsize))
+ggsave("../drafts/figs/salary_pp_localtests_20knots.pdf")
+
+textsize= 35
+bsel= filter(b2, covariate %in% c('black','female','hispanic','college'))
+ggplot(bsel, aes(z1, estimate)) +
+    geom_line(aes(group=covariate, col=covariate, lty=covariate), lwd=2) +
+    labs(x='Age (years)', y='Estimated covariate effect (log10)') +
+    scale_colour_grey() +
+    theme_bw() +
+    theme(axis.text=element_text(size=textsize), axis.title=element_text(size=textsize), legend.title=element_text(size=textsize), legend.text=element_text(size=textsize), legend.position=c(.83,.7), legend.key.width=unit(5,'cm'))
+ggsave("../drafts/figs/salary_estimated_effects_20knots.pdf")
+
+
+
+## SET 30 KNOTS ##
+
+fit3= localnulltest(y, x=x, z=z, x.adjust=x.adjust, nbaseknots=30, nlocalknots=30, verbose=TRUE)  #results in low power
+b3= coef(fit3)
+
+b3= data.frame(covariate=1:ncol(x), covariaten= names(x)) |>
+     right_join(b3) |>
+     select(-covariate) |>
+     rename(covariate= covariaten)
+
+textsize= 35
+mycols= rep(c('black','darkgrey'), ncol(x)/2 + 1)[1:ncol(x)]
+ggplot(b3, aes(z1, margpp)) +
+    geom_line() +
+    #geom_line(aes(group=covariate, lty=covariate)) +
+    labs(x='Age (years)', y='Posterior probability of a covariate effect') +
+    facet_wrap( ~ covariate) +
+    ylim(0,1) + 
+    scale_colour_grey() +
+    theme_bw() +
+    theme(axis.text=element_text(size=textsize), axis.title=element_text(size=textsize), legend.title=element_text(size=textsize), legend.text=element_text(size=textsize), legend.position=c(.83,.2), legend.key.width=unit(5,'cm'), strip.text.x = element_text(size=textsize))
+
+textsize= 35
+bsel= filter(b3, covariate %in% c('black','female','hispanic','college'))
+ggplot(bsel, aes(z1, estimate)) +
+    geom_line(aes(group=covariate, col=covariate, lty=covariate), lwd=2) +
+    labs(x='Age (years)', y='Estimated covariate effect (log10)') +
+    scale_colour_grey() +
+    theme_bw() +
+    theme(axis.text=element_text(size=textsize), axis.title=element_text(size=textsize), legend.title=element_text(size=textsize), legend.text=element_text(size=textsize), legend.position=c(.83,.7), legend.key.width=unit(5,'cm'))
+
               
