@@ -7,6 +7,8 @@ If you just want a quick intro on how to use mombf to do variable selection see
 
 Regarding reproducing the paper's results,  the relevant files are below:
 
+- figure1.R: reproduces the plots in Figure 1 and related supplementary figures
+
 - simulation_iid.R: reproduces Section 5.1 "Simulation with independent errors"
 
 - simulation_fda.R: reproduces Section 5.2 "Functional data simulation"
