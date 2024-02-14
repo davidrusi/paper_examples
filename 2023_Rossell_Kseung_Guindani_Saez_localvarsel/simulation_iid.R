@@ -11,6 +11,7 @@ library(tidyverse)
 #devtools::install_github(repo = "skdeshpande91/VCBART/VCBART")
 library(VCBART)
 library(here)
+setwd("~/github/localnulltest")
 
 
 
@@ -144,47 +145,20 @@ sim_bart= function(seed, n, p, sd.error=0.25, mc.cores) {
 ###############################################################################
 
 
-#Modification of Sameer Deshpande's get_beta_support at https://github.com/skdeshpande91/VCBART
-# - Corrects a bug that caused it to crash when R=1 (dimension of z)
-# - Requires a single MCMC run, rather reporting the average across 2 MCMC runs
-# Output: exceed_cutoff_probs are marginal posterior inclusion probabilities, support are the selected covariates
-my_get_beta_support= function (chain1, burn, max_cutoff=1) {
-    R= dim(chain1$var_counts_samples)[1]
-    p= dim(chain1$var_counts_samples)[2]
-    exceed_cutoff_probs <- array(dim = c(R, p, max_cutoff))
-    support <- list()
-    for (cutoff in 1:max_cutoff) {
-        tmp_support <- list()
-        exceed_cutoff_probs[, , cutoff]= apply(chain1$var_counts_samples[,,-(1:burn),drop=FALSE] >= cutoff, MARGIN = c(1, 2), FUN = mean)
-        for (k in 1:p) tmp_support[[k]] <- which(exceed_cutoff_probs[, k, cutoff] >= 0.5)
-        support[[cutoff]] <- tmp_support
+#Format VCBART posterior summaries.
+#Input: output of summarize_beta
+#Ouput: data.frame indicating, for each variable and z coordinate, the posterior mean and 0.95 posterior interval. 
+format_vcbart_beta_summary= function(beta, ztest) {
+    ans= matrix(nrow=0, ncol=5)
+    colnames(ans)= c('variable','z','mean','low','up')
+    for (j in 2:dim(beta)[3]) {
+      ans= rbind(ans, cbind(j-1, ztest, beta[,,j]))  #posterior mean and 0.95 interval for beta[,j] at all values of z
     }
-    return(list(exceed_cutoff_probs = exceed_cutoff_probs, support = support))
+    ans= data.frame(ans)
+    ans$variable= factor(ans$variable)
+    return(ans)
 }
 
-#Modification of Sameer Deshpande's get_beta_support at https://github.com/skdeshpande91/VCBART
-# - Corrects a bug that caused it to crash when R=1 (dimension of z)
-# - Requires a single MCMC run, rather reporting the average across 2 MCMC runs
-# Input: chain1 is the output from VCBART, burn the number of burn-in iterations
-# Output: posterior mean, sd, and 0.95 interval for each observation's mean
-my_summarize_beta= function (chain1, burn) {
-    N_train <- dim(chain1$beta_train_samples)[1]
-    N_test <- dim(chain1$beta_test_samples)[1]
-    p <- dim(chain1$beta_train_samples)[2]
-    beta_summary_train <- array(dim = c(N_train, 4, p), dimnames = list(c(), c("MEAN", "SD", "L95", "U95"), c()))
-    beta_summary_test <- array(dim = c(N_test, 4, p), dimnames = list(c(), c("MEAN", "SD", "L95", "U95"), c()))
-    for (k in 1:p) {
-        beta_summary_train[, "MEAN", k] <- apply(chain1$beta_train_samples[, k, ], FUN=mean, MARGIN=1, na.rm=TRUE)
-        beta_summary_train[, "SD", k] <- apply(chain1$beta_train_samples[, k, ], FUN = sd, MARGIN = 1, na.rm = TRUE)
-        beta_summary_train[, "L95", k] <- apply(chain1$beta_train_samples[, k, ], FUN = quantile, MARGIN = 1, probs = 0.025)
-        beta_summary_train[, "U95", k] <- apply(chain1$beta_train_samples[, k, ], FUN = quantile, MARGIN = 1, probs = 0.975)
-        beta_summary_test[, "MEAN", k] <- apply(chain1$beta_test_samples[, k, ], FUN = mean, MARGIN = 1, na.rm = TRUE)
-        beta_summary_test[, "SD", k] <- apply(chain1$beta_test_samples[, k, ], FUN = sd, MARGIN = 1, na.rm = TRUE)
-        beta_summary_test[, "L95", k] <- apply(chain1$beta_test_samples[, k, ], FUN = quantile, MARGIN = 1, probs = 0.025)
-        beta_summary_test[, "U95", k] <- apply(chain1$beta_test_samples[, k, ], FUN = quantile, MARGIN = 1, probs = 0.975)
-    }
-    return(list(train = beta_summary_train, test = beta_summary_test))
-}
 
 #Run VCBART on simulated data
 sim_vcbart= function(seed, n, p, sd.error=0.25, cutoff=1, mc.cores) {
@@ -197,40 +171,87 @@ sim_vcbart= function(seed, n, p, sd.error=0.25, cutoff=1, mc.cores) {
     nd= 1000 #number of MCMC iterations
     ztest= matrix(seq(min(sim$z), max(sim$z), length=100), ncol=1)
     xtest= matrix(1, nrow=nrow(ztest), ncol=ncol(sim$x))
-    bartfit= VCBART(Y_train=sim$y, X_train=xtrain, Z_train=matrix(sim$z,ncol=1), n_train=length(train), X_test=xtest, Z_test=ztest, n_test=nrow(xtest), error_structure="ind", split_probs_type="adaptive", nd=nd, cutpoints=cutpoints, verbose=FALSE)
-    beta_summary= my_summarize_beta(bartfit, burn=500)
-    betahat= beta_summary$train[,"MEAN",]
-    betahat.test= beta_summary$test[,"MEAN",]
+    #Run VCBART and obtain posterior summaries
+    bartfit= VCBART_ind(Y_train=sim$y, X_train=xtrain, Z_cont_train=matrix(sim$z,ncol=1), ni_train=rep(1,length(train)), subj_id_train=1:length(train), X_test=xtest, Z_cont_test=ztest, nd=nd, cutpoints=cutpoints, verbose=FALSE)
+    betahat= summarize_beta(bartfit$betahat.train)
+    betahat.test= summarize_beta(bartfit$betahat.test)
+    betahat.test= format_vcbart_beta_summary(betahat.test, ztest=ztest)
     #MSE for true expectation
-    muhat= betahat[,1] + rowSums(betahat[,-1] * xtrain)
+    muhat= betahat[,1,1] + rowSums(xtrain * betahat[,1,-1])
     mse= sum((muhat - sim$m[train])^2)  #MSE in estimating the mean
-    #Posterior inclusion probability of z for each covariate
-    beta_support= my_get_beta_support(bartfit, burn=500, max_cutoff=100)
-    margpp= beta_support$exceed_cutoff_probs[1,,]  #select first row since z is univariate
-    #margpp= beta_support$exceed_cutoff_probs[1,,cutoff]  #select first row since z is univariate
     #Return output
-    ans= list(margpp=margpp, mse=mse, df=df)
+    ans= list(beta.ci=betahat.test, mse=mse)
+    #Old VCBART version used the code below
+    #bartfit= VCBART(Y_train=sim$y, X_train=xtrain, Z_train=matrix(sim$z,ncol=1), n_train=length(train), X_test=xtest, Z_test=ztest, n_test=nrow(xtest), error_structure="ind", split_probs_type="adaptive", nd=nd, cutpoints=cutpoints, verbose=FALSE)
+    #beta_summary= my_summarize_beta(bartfit, burn=500)
+    #betahat= beta_summary$train[,"MEAN",]
+    #betahat.test= beta_summary$test[,"MEAN",]
+    ##MSE for true expectation
+    #muhat= betahat[,1] + rowSums(betahat[,-1] * xtrain)
+    #mse= sum((muhat - sim$m[train])^2)  #MSE in estimating the mean
+    #Posterior inclusion probability of z for each covariate
+    #beta_support= my_get_beta_support(bartfit, burn=500, max_cutoff=100)
+    #margpp= beta_support$exceed_cutoff_probs[1,,]  #select first row since z is univariate
+    #Return output
+    #ans= list(margpp=margpp, mse=mse, df=df)
     return(ans)
 }
 
 
 
-#Create test set consisting of a range of z values, where each covariate is set to 0 or 1 for each z-value and the remaining covariates are set to their mean
-createTestset= function(x, z) {
-    zseq= rep(seq(min(z), max(z), length=100), 2)
-    m= colMeans(x)
-    xseq= rep(0:1, each=100)
-    ztest= matrix(rep(zseq, ncol(x)), ncol=1)
-    xtest= lapply(1:ncol(x), function(i) matrix(NA, nrow=length(zseq), ncol=ncol(x)))
-    covariate= rep(1:ncol(x), each=length(zseq))
-    for (i in 1:ncol(x)) {
-        xtest[[i]][,i]= xseq
-        xtest[[i]][,-i]= matrix(rep(m[-i], length(zseq)), nrow=length(zseq), ncol=ncol(x)-1, byrow=TRUE)
-    }
-    xtest= do.call(rbind, xtest)
-    ans= list(xtest=xtest, ztest=ztest, covariate=covariate)
-    return(ans)
-}
+## DEPRECATED ROUTINES FOR OLD VCBART VERSION
+
+
+#Modification of Sameer Deshpande's get_beta_support at https://github.com/skdeshpande91/VCBART
+# - Corrects a bug that caused it to crash when R=1 (dimension of z)
+# - Requires a single MCMC run, rather reporting the average across 2 MCMC runs
+# Output: exceed_cutoff_probs are marginal posterior inclusion probabilities, support are the selected covariates
+#my_get_beta_support= function (chain1, burn, max_cutoff=1) {
+#    R= dim(chain1$var_counts_samples)[1]
+#    p= dim(chain1$var_counts_samples)[2]
+#    exceed_cutoff_probs <- array(dim = c(R, p, max_cutoff))
+#    support <- list()
+#    for (cutoff in 1:max_cutoff) {
+#        tmp_support <- list()
+#        exceed_cutoff_probs[, , cutoff]= apply(chain1$var_counts_samples[,,-(1:burn),drop=FALSE] >= cutoff, MARGIN = c(1, 2), FUN = mean)
+#        for (k in 1:p) tmp_support[[k]] <- which(exceed_cutoff_probs[, k, cutoff] >= 0.5)
+#        support[[cutoff]] <- tmp_support
+#    }
+#    return(list(exceed_cutoff_probs = exceed_cutoff_probs, support = support))
+#}
+
+#Modification of Sameer Deshpande's get_beta_support at https://github.com/skdeshpande91/VCBART
+# - Corrects a bug that caused it to crash when R=1 (dimension of z)
+# - Requires a single MCMC run, rather reporting the average across 2 MCMC runs
+# Input: chain1 is the output from VCBART, burn the number of burn-in iterations
+# Output: posterior mean, sd, and 0.95 interval for each observation's mean
+#my_summarize_beta= function (chain1, burn) {
+#    N_train <- dim(chain1$beta_train_samples)[1]
+#    N_test <- dim(chain1$beta_test_samples)[1]
+#    p <- dim(chain1$beta_train_samples)[2]
+#    beta_summary_train <- array(dim = c(N_train, 4, p), dimnames = list(c(), c("MEAN", "SD", "L95", "U95"), c()))
+#    beta_summary_test <- array(dim = c(N_test, 4, p), dimnames = list(c(), c("MEAN", "SD", "L95", "U95"), c()))
+#    for (k in 1:p) {
+#        beta_summary_train[, "MEAN", k] <- apply(chain1$beta_train_samples[, k, ], FUN=mean, MARGIN=1, na.rm=TRUE)
+#        beta_summary_train[, "SD", k] <- apply(chain1$beta_train_samples[, k, ], FUN = sd, MARGIN = 1, na.rm = TRUE)
+#        beta_summary_train[, "L95", k] <- apply(chain1$beta_train_samples[, k, ], FUN = quantile, MARGIN = 1, probs = 0.025)
+#        beta_summary_train[, "U95", k] <- apply(chain1$beta_train_samples[, k, ], FUN = quantile, MARGIN = 1, probs = 0.975)
+#        beta_summary_test[, "MEAN", k] <- apply(chain1$beta_test_samples[, k, ], FUN = mean, MARGIN = 1, na.rm = TRUE)
+#        beta_summary_test[, "SD", k] <- apply(chain1$beta_test_samples[, k, ], FUN = sd, MARGIN = 1, na.rm = TRUE)
+#        beta_summary_test[, "L95", k] <- apply(chain1$beta_test_samples[, k, ], FUN = quantile, MARGIN = 1, probs = 0.025)
+#        beta_summary_test[, "U95", k] <- apply(chain1$beta_test_samples[, k, ], FUN = quantile, MARGIN = 1, probs = 0.975)
+#    }
+#    return(list(train = beta_summary_train, test = beta_summary_test))
+#}
+
+#Proportion of simulations in which a variable j for various cutoffs, ranging from 1 to max_cutoff
+# Variable inclusion is based on the marginal posterior probability of being in >=cutoff trees. When said probability is > 0.95, the variable in considered included
+# - j: index of the variable
+# - max_cutoff: maximum cutoff to consider
+#prop_rejected_vcbart= function(j, max_cutoff=50) {
+#    ans= rowMeans(sapply(sim.vcbart, function(zz) zz$margpp[j+1, 1:max_cutoff] > 0.95))  #use j+1 since 1st variable is the intercept
+#    return(ans)
+#}
 
 
 
@@ -282,39 +303,6 @@ save(sim.vcbart, file=here("code", "simulation_iid_output", paste0("sim_vcbart_n
 
 
 
-n=100
-load(here("code", "simulation_iid_output", paste0("sim_vcbart_n", n,".RData")))
-names(sim.vcbart[[1]])
-max_cutoff= 50
-truly_active= 2
-
-
-#Proportion of simulations in which a variable j for various cutoffs, ranging from 1 to max_cutoff
-# Variable inclusion is based on the marginal posterior probability of being in >=cutoff trees. When said probability is > 0.95, the variable in considered included
-# - j: index of the variable
-# - max_cutoff: maximum cutoff to consider
-prop_rejected_vcbart= function(j, max_cutoff=50) {
-    ans= rowMeans(sapply(sim.vcbart, function(zz) zz$margpp[j+1, 1:max_cutoff] > 0.95))  #use j+1 since 1st variable is the intercept
-    return(ans)
-}
-
-#Power
-p= 10; max_cutoff= 50
-prop_rejected_vcbart(2, max_cutoff=max_cutoff)
-
-#Type I error
-prop_rej= matrix(NA, nrow=p-1, ncol=max_cutoff)
-for (j in 2:p) prop_rej[j-1,]= prop_rejected_vcbart(j, max_cutoff=max_cutoff)
-colMeans(prop_rej)
-
-
-
-pow.vcbart= sapply(sim.vcbart, function(zz) zz$margpp[2, 1:max_cutoff] > 0.95)  #number of rejected null hypothesis for various cutoffs (post prob > 0.95 of being in cutoff trees)
-
-
-typeI.vcbart= sapply(sim.vcbart, function(zz) zz$margpp[-2, 1:max_cutoff] > 0.95)  #number of rejected null hypothesis for various cutoffs (post prob > 0.95 of being in cutoff trees)
-rowMeans(pow.vcbart)
-
 
 
 ###############################################################################
@@ -324,7 +312,7 @@ rowMeans(pow.vcbart)
 
 # n=100
 
-load(here("code/simulation_iid_output/sim_n100.RData"))
+load("code/simulation_iid_output/sim_n100.RData")
 id= sim[[1]]$margpp[,c('covariate','z')]
 pp0= do.call(cbind, lapply(sim, function(z) z$margpp[,'cut0']))
 pp3= do.call(cbind, lapply(sim, function(z) z$margpp[,'uncut3']))
@@ -338,7 +326,7 @@ df= data.frame(id, pow0, pow3) |>
 tab= summarize(df, cut0=mean(pow0), uncut3=mean(pow3))
 
 
-load(here("code/simulation_iid_output/sim_ols_n100.RData"))
+load("code/simulation_iid_output/sim_ols_n100.RData")
 pval= do.call(cbind, lapply(sim, function(z) z$pvalue.adjusted))
 pow= rowMeans(pval < .05, na.rm=TRUE)
 
@@ -349,13 +337,27 @@ df= data.frame(sim[[1]][,c('varname','zmin','zmax')], pow) |>
 
 tab.pval= summarize(df, pval=mean(pow, na.rm=TRUE))
 
-tab= cbind(tab, tab.pval[,'pval'])
+
+n=100
+load("code", "simulation_iid_output", paste0("sim_vcbart_n", n,".RData"))
+names(sim.vcbart[[1]])
+
+threshold= 0
+pow.vcbart= rowMeans(sapply(sim.vcbart, function(z, threshold=threshold) rej= (z$beta.ci[,'low'] > 0) | (z$beta.ci[,'up']<0)))
+
+df= data.frame(sim.vcbart[[1]]$beta.ci[,c('variable','z')], pow.vcbart) |>
+  mutate(region= cut(z, breaks=c(-3.01,-2,-1,0,1,2,3.01)), covariate1= (variable==1)) |>
+  group_by(covariate1, region)
+
+tab.vcbart= summarize(df, pow.vcbart= mean(pow.vcbart))
+
+tab= cbind(tab, tab.pval[,'pval'], tab.vcbart[,'pow.vcbart'])
 cbind(filter(tab, covariate1)[,-1], filter(tab, !covariate1)[,-1:-2])
 
 
 # n=1000
 
-load(here("code/simulation_iid_output/sim_n1000.RData"))
+load("code/simulation_iid_output/sim_n1000.RData")
 id= sim[[1]]$margpp[,c('covariate','z')]
 pp0= do.call(cbind, lapply(sim, function(z) z$margpp[,'cut0']))
 pp3= do.call(cbind, lapply(sim, function(z) z$margpp[,'uncut3']))
@@ -369,7 +371,7 @@ df= data.frame(id, pow0, pow3) |>
 tab= summarize(df, cut0=mean(pow0), uncut3=mean(pow3))
 
 
-load(here("code/simulation_iid_output/sim_ols_n1000.RData"))
+load("code/simulation_iid_output/sim_ols_n1000.RData")
 pval= do.call(cbind, lapply(sim, function(z) z$pvalue.adjusted))
 pow= rowMeans(pval < .05, na.rm=TRUE)
 
@@ -380,7 +382,21 @@ df= data.frame(sim[[1]][,c('varname','zmin','zmax')], pow) |>
 
 tab.pval= summarize(df, pval=mean(pow, na.rm=TRUE))
 
-tab= cbind(tab, tab.pval[,'pval'])
+
+n=1000
+load("code", "simulation_iid_output", paste0("sim_vcbart_n", n,".RData"))
+names(sim.vcbart[[1]])
+
+threshold= 0
+pow.vcbart= rowMeans(sapply(sim.vcbart, function(z, threshold=threshold) rej= (z$beta.ci[,'low'] > 0) | (z$beta.ci[,'up']<0)))
+
+df= data.frame(sim.vcbart[[1]]$beta.ci[,c('variable','z')], pow.vcbart) |>
+  mutate(region= cut(z, breaks=c(-3.01,-2,-1,0,1,2,3.01)), covariate1= (variable==1)) |>
+  group_by(covariate1, region)
+
+tab.vcbart= summarize(df, pow.vcbart= mean(pow.vcbart))
+
+tab= cbind(tab, tab.pval[,'pval'], tab.vcbart[,'pow.vcbart'])
 cbind(filter(tab, covariate1)[,-1], filter(tab, !covariate1)[,-1:-2])
 
 
@@ -415,9 +431,9 @@ xtable(sqrt(mse), digits=c(0,3,3,3))
 ## PLOTS FOR n=100
 ###############################################################################
 
-textsize= 18
-#textsize= 35
-load(here("code/simulation_iid_output/sim_n100.RData"))
+#textsize= 18
+textsize= 35
+load("code/simulation_iid_output/sim_n100.RData")
 id= sim[[1]]$margpp[,c('covariate','z')]
 pp0= do.call(cbind, lapply(sim, function(z) z$margpp[,'cut0']))
 pp3= do.call(cbind, lapply(sim, function(z) z$margpp[,'uncut3']))
@@ -429,6 +445,15 @@ pp3m= rowMeans(pp3)
 #Power for test based on pp > 0.95
 pow0= rowMeans(pp0 > 0.95)
 pow3= rowMeans(pp3 > 0.95)
+
+#Power for VC-BART
+load("code/simulation_iid_output/sim_vcbart_n100.RData")
+
+threshold=0
+pow.vcbart= rowMeans(sapply(sim.vcbart, function(z, threshold=threshold) rej= (z$beta.ci[,'low'] > 0) | (z$beta.ci[,'up']<0)))
+df.vcbart= data.frame(sim.vcbart[[1]]$beta.ci[,c('variable','z')], pow.vcbart)
+
+
 
 ## PLOT POSTERIOR PROBABILITIES ##
 ##################################
@@ -451,13 +476,12 @@ df= rbind(df1, df2) |>
     transform(group= paste(Basis,Covariate,sep=", "))
 
 ggplot(df, aes(x=z, y=pp)) +
-    geom_line(aes(lty=Basis, color=Covariate), lwd=3) +
-    scale_colour_grey() +
+    geom_line(aes(color=Basis, lty=Covariate), lwd=3) +
     ylim(0,1) +
     labs(y='Posterior probability of covariate effect') +
     theme(axis.text=element_text(size=textsize), axis.title=element_text(size=textsize), legend.title=element_text(size=textsize), legend.text=element_text(size=textsize), legend.position=c(.17,.8), legend.key.width=unit(1.75,'cm'))
 
-ggsave("simiid_pp_n100.pdf")
+ggsave("drafts/figs/simiid_pp_n100.pdf")
 
 
 
@@ -467,30 +491,42 @@ ggsave("simiid_pp_n100.pdf")
 
 df1= tibble(id, pow0, pow3) |>
     filter(covariate == 1) |>
-    pivot_longer(cols=c('pow0','pow3'), names_to= "Basis", values_to="pp") |>
+    pivot_longer(cols=c('pow0','pow3'), names_to= "Method", values_to="pow") |>
     select(-covariate) |>
     transform(Covariate="x1")
-df1$Basis= recode(df1$Basis, pow0="Degree 0", pow3="Cubic")
+df1$Method= recode(df1$Method, pow0="Degree 0", pow3="Cubic")
+
+df1.vcbart= filter(df.vcbart, variable==1) |>
+  transform(Method='VC-BART', pow=pow.vcbart, Covariate=paste('x',variable,sep='')) |>
+  select(z, Method, pow, Covariate)
+
+df1= rbind(df1, df1.vcbart)
 
 df2= tibble(id, pow0, pow3) |>
     filter(covariate != 1) |>
     group_by(z) |>
     summarise(`Degree 0`=mean(pow0), `Cubic`=mean(pow3)) |>
-    gather(key=Basis, value=pp, 2:3) |>
+    gather(key=Method, value=pow, 2:3) |>
     transform(Covariate="x2-x10")
 
-df= rbind(df1, df2) |>
-    transform(group= paste(Basis,Covariate,sep=", "))
+df2.vcbart= filter(df.vcbart, variable!=1) |>
+  group_by(z) |>
+  summarize(pow= mean(pow.vcbart)) |>
+  transform(Method='VC-BART', Covariate="x2-x10") |>
+  select(z, Method, pow, Covariate)
 
-ggplot(df, aes(x=z, y=pp)) +
-    geom_line(aes(lty=Basis, color=Covariate), lwd=3) +
-    scale_colour_grey() +
+df2= rbind(df2, df2.vcbart)
+
+df= rbind(df1, df2) |>
+    transform(group= paste(Method,Covariate,sep=", "))
+
+ggplot(df, aes(x=z, y=pow)) +
+    geom_line(aes(color=Method, lty=Covariate), lwd=3) +
     ylim(0,1) +
     labs(y='Power for covariate inclusion') +
     theme(axis.text=element_text(size=textsize), axis.title=element_text(size=textsize), legend.title=element_text(size=textsize), legend.text=element_text(size=textsize), legend.position=c(.17,.8), legend.key.width=unit(1.7,'cm'))
 
-
-ggsave("simiid_pow_n100.pdf")
+ggsave("drafts/figs/simiid_pow_n100.pdf")
 
 
 
@@ -498,7 +534,7 @@ ggsave("simiid_pow_n100.pdf")
 ## PLOTS FOR n=1000
 ###############################################################################
 
-load(here("code/simulation_iid_output/sim_n1000.RData"))
+load("code/simulation_iid_output/sim_n1000.RData")
 id= sim[[1]]$margpp[,c('covariate','z')]
 pp0= do.call(cbind, lapply(sim, function(z) z$margpp[,'cut0']))
 pp3= do.call(cbind, lapply(sim, function(z) z$margpp[,'uncut3']))
@@ -510,6 +546,14 @@ pp3m= rowMeans(pp3)
 #Power for test based on pp > 0.95
 pow0= rowMeans(pp0 > 0.95)
 pow3= rowMeans(pp3 > 0.95)
+
+#Power for VC-BART
+load("code/simulation_iid_output/sim_vcbart_n1000.RData")
+
+threshold=0
+pow.vcbart= rowMeans(sapply(sim.vcbart, function(z, threshold=threshold) rej= (z$beta.ci[,'low'] > 0) | (z$beta.ci[,'up']<0)))
+df.vcbart= data.frame(sim.vcbart[[1]]$beta.ci[,c('variable','z')], pow.vcbart)
+
 
 
 ## PLOT POSTERIOR PROBABILITIES ##
@@ -533,13 +577,14 @@ df= rbind(df1, df2) |>
     transform(group= paste(Basis,Covariate,sep=", "))
 
 ggplot(df, aes(x=z, y=pp)) +
-    geom_line(aes(lty=Basis, color=Covariate), lwd=3) +
-    scale_colour_grey() +
+    geom_line(aes(color=Basis, lty=Covariate), lwd=3) +
     ylim(0,1) +
-    labs(y='Posterior probability of local null test') +
-    theme(axis.text=element_text(size=textsize), axis.title=element_text(size=textsize), legend.title=element_text(size=textsize), legend.text=element_text(size=textsize), legend.position=c(.17,.8), legend.key.width=unit(1.7,'cm'))
+    labs(y='Posterior probability of covariate effect') +
+    theme(axis.text=element_text(size=textsize), axis.title=element_text(size=textsize), legend.title=element_text(size=textsize), legend.text=element_text(size=textsize), legend.position=c(.17,.8), legend.key.width=unit(1.75,'cm'))
 
-ggsave("simiid_pp_n1000.pdf")
+ggsave("drafts/figs/simiid_pp_n1000.pdf")
+
+
 
 
 ## PLOT POWER FUNCTION ##
@@ -547,30 +592,42 @@ ggsave("simiid_pp_n1000.pdf")
 
 df1= tibble(id, pow0, pow3) |>
     filter(covariate == 1) |>
-    pivot_longer(cols=c('pow0','pow3'), names_to= "Basis", values_to="pp") |>
+    pivot_longer(cols=c('pow0','pow3'), names_to= "Method", values_to="pow") |>
     select(-covariate) |>
     transform(Covariate="x1")
-df1$Basis= recode(df1$Basis, pow0="Degree 0", pow3="Cubic")
+df1$Method= recode(df1$Method, pow0="Degree 0", pow3="Cubic")
+
+df1.vcbart= filter(df.vcbart, variable==1) |>
+  transform(Method='VC-BART', pow=pow.vcbart, Covariate=paste('x',variable,sep='')) |>
+  select(z, Method, pow, Covariate)
+
+df1= rbind(df1, df1.vcbart)
 
 df2= tibble(id, pow0, pow3) |>
     filter(covariate != 1) |>
     group_by(z) |>
     summarise(`Degree 0`=mean(pow0), `Cubic`=mean(pow3)) |>
-    gather(key=Basis, value=pp, 2:3) |>
+    gather(key=Method, value=pow, 2:3) |>
     transform(Covariate="x2-x10")
 
-df= rbind(df1, df2) |>
-    transform(group= paste(Basis,Covariate,sep=", "))
+df2.vcbart= filter(df.vcbart, variable!=1) |>
+  group_by(z) |>
+  summarize(pow= mean(pow.vcbart)) |>
+  transform(Method='VC-BART', Covariate="x2-x10") |>
+  select(z, Method, pow, Covariate)
 
-ggplot(df, aes(x=z, y=pp)) +
-    geom_line(aes(lty=Basis, color=Covariate), lwd=3) +
-    scale_colour_grey() +
+df2= rbind(df2, df2.vcbart)
+
+df= rbind(df1, df2) |>
+    transform(group= paste(Method,Covariate,sep=", "))
+
+ggplot(df, aes(x=z, y=pow)) +
+    geom_line(aes(color=Method, lty=Covariate), lwd=3) +
     ylim(0,1) +
     labs(y='Power for covariate inclusion') +
     theme(axis.text=element_text(size=textsize), axis.title=element_text(size=textsize), legend.title=element_text(size=textsize), legend.text=element_text(size=textsize), legend.position=c(.17,.8), legend.key.width=unit(1.7,'cm'))
 
-
-ggsave("simiid_pow_n1000.pdf")
+ggsave("drafts/figs/simiid_pow_n1000.pdf")
 
 
 
