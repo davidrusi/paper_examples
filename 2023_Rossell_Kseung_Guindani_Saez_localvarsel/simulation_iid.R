@@ -79,6 +79,86 @@ sim_localnulltest= function(seed, n, p, sd.error=0.25, mc.cores) {
 
 
 ###############################################################################
+## GAM-BASED LOCAL NULL TESTS
+###############################################################################
+
+# Return simultaneous confidence interval from a gam fit, estimated via simulations
+# INPUT
+# - fit: object returned by gam
+# - parm: name of the smooth term in fit for which we want the confidence intervals
+# - level: confidence level
+# - nsim: number of simulations (multivariate normal draws)
+# - data: data.frame used to fit the object
+# OUTPUT: point estimates, lower and upper ends of the confidence interval. This is similar to using predict.gam, except that the standard error is multiplied by a critical level related to the maximum of Gaussians, rather than the standard normal quantile (e.g. 1.96 for level=0.95), resulting in wider intervals
+# NOTES
+# Function adapted from package gratia, following the description in https://fromthebottomoftheheap.net/2016/12/15/simultaneous-interval-revisited
+#
+# REFERENCES
+# Marra, G., and Wood, S. N. (2012). Coverage properties of confidence intervals for generalized additive model components. Scandinavian journal of statistics, theory and applications 39, 53–74. doi:10.1111/j.1467-9469.2011.00760.x.
+# Nychka, D. (1988). Bayesian confidence intervals for smoothing splines. Journal of the American Statistical Association 83, 1134–1143. doi:10.1080/01621459.1988.10478711.
+# Ruppert, D., Wand, M. P., and Carroll, R. J. (2003). Semiparametric regression. Cambridge University Press.
+simultaneous_ci= function(fit, parm, level=0.95, nsim=10000, data) {
+    #Auxiliary function
+    sim_interval <- function(smooth, level, data, se.fit) {
+      start <- smooth[["first.para"]]
+      end <- smooth[["last.para"]]
+      para.seq <- start:end
+      Cg <- PredictMat(smooth, data)
+      simDev <- Cg %*% t(buDiff[, para.seq])
+      absDev <- abs(sweep(simDev, 1L, se.fit, FUN = "/")) #David modified
+      masd <- apply(absDev, 2L, max, na.rm=TRUE)
+      unname(quantile(masd, probs = level, type = 8))
+    }
+    V <- gratia:::get_vcov(fit, unconditional = FALSE)  # covariance matrix of fitted object
+    buDiff <- mvnfast::rmvn(n = nsim, mu = rep(0, nrow(V)), sigma = V, ncores = 1)     ## simulate un-biased deviations given bayesian covar matrix
+    #Select smooth term specified by parm
+    S <- gratia:::smooths(fit)
+    select <- gratia:::check_user_select_smooths(smooths = S, select = parm, partial_match = FALSE)
+    #out <- gratia::smooth_estimates(fit, select = S, n = n, data = data, partial_match = FALSE)
+    smooth <- gratia:::get_smooth(fit, parm)
+    #Find critical level
+    pred= predict(fit, type='iterms', se.fit=TRUE, terms=parm) #David added
+    crit <- sim_interval(smooth, level = level, data = data, se.fit= pred$se.fit)
+    #Return simultaneous confidence interval
+    ans= data.frame(pred$fit, pred$fit - crit * pred$se.fit, pred$fit + crit * pred$se.fit)
+    names(ans)= c('estimate','ci.low','ci.up')
+    return(ans)
+}
+
+
+sim_localnulltest_gam= function(seed, n, p, sd.error=0.25, k, level=0.95) {
+    require(mgcv)
+    sim= simdata(seed=seed, n=n, p=p, sd.error=sd.error)
+    df= data.frame(y= sim$y, x= sim$x, z= sim$z)
+    names(df)= c("y", paste("x",1:p,sep=""), "z")
+    if (missing(k)) {  #use gam's default number of knots
+        txt_main= "y ~ s(z)"
+        txt_int= paste(" + s(z, by=x",1:ncol(sim$x),")",sep='',collapse="")
+    } else {           #use user-specified number of knots k
+        txt_main= "y ~ s(z, k=k)"
+        txt_int= paste(" + s(z, k=k, by=x",1:ncol(sim$x),")",sep='',collapse="")
+    }
+    f= as.formula(paste(txt_main, txt_int))
+    fit= gam(f, data=df)
+    #pred= predict(fit, type='lpmatrix', terms='s(z, by=x[, 1])') #shows that by default, k=12 knots (basis dimension is 9)
+    mse= sum((predict(fit) - sim$m)^2)  
+    ans= vector("list", p)
+    for (i in 1:p) {
+        terms= paste("s(z):x",i,sep="")
+        ci= simultaneous_ci(fit, parm=terms, level=level, nsim=10^4, data=df)
+        ci= data.frame(i, sim$z, ci)
+        names(ci)= c('varname','z','estimate','ci.low','ci.up')
+        ans[[i]]= ci[sim$x[,1] == 1,] #select 2nd half of observations, to avoid duplicating z's
+    }
+    ans= do.call(rbind, ans)
+    ans= list(ci=ans, mse=mse)
+    return(ans)
+}
+
+
+
+
+###############################################################################
 ## P-VALUE BASED LOCAL NULL TESTS
 ###############################################################################
 
@@ -181,77 +261,9 @@ sim_vcbart= function(seed, n, p, sd.error=0.25, cutoff=1, mc.cores) {
     mse= sum((muhat - sim$m[train])^2)  #MSE in estimating the mean
     #Return output
     ans= list(beta.ci=betahat.test, mse=mse)
-    #Old VCBART version used the code below
-    #bartfit= VCBART(Y_train=sim$y, X_train=xtrain, Z_train=matrix(sim$z,ncol=1), n_train=length(train), X_test=xtest, Z_test=ztest, n_test=nrow(xtest), error_structure="ind", split_probs_type="adaptive", nd=nd, cutpoints=cutpoints, verbose=FALSE)
-    #beta_summary= my_summarize_beta(bartfit, burn=500)
-    #betahat= beta_summary$train[,"MEAN",]
-    #betahat.test= beta_summary$test[,"MEAN",]
-    ##MSE for true expectation
-    #muhat= betahat[,1] + rowSums(betahat[,-1] * xtrain)
-    #mse= sum((muhat - sim$m[train])^2)  #MSE in estimating the mean
-    #Posterior inclusion probability of z for each covariate
-    #beta_support= my_get_beta_support(bartfit, burn=500, max_cutoff=100)
-    #margpp= beta_support$exceed_cutoff_probs[1,,]  #select first row since z is univariate
-    #Return output
-    #ans= list(margpp=margpp, mse=mse, df=df)
     return(ans)
 }
 
-
-
-## DEPRECATED ROUTINES FOR OLD VCBART VERSION
-
-
-#Modification of Sameer Deshpande's get_beta_support at https://github.com/skdeshpande91/VCBART
-# - Corrects a bug that caused it to crash when R=1 (dimension of z)
-# - Requires a single MCMC run, rather reporting the average across 2 MCMC runs
-# Output: exceed_cutoff_probs are marginal posterior inclusion probabilities, support are the selected covariates
-#my_get_beta_support= function (chain1, burn, max_cutoff=1) {
-#    R= dim(chain1$var_counts_samples)[1]
-#    p= dim(chain1$var_counts_samples)[2]
-#    exceed_cutoff_probs <- array(dim = c(R, p, max_cutoff))
-#    support <- list()
-#    for (cutoff in 1:max_cutoff) {
-#        tmp_support <- list()
-#        exceed_cutoff_probs[, , cutoff]= apply(chain1$var_counts_samples[,,-(1:burn),drop=FALSE] >= cutoff, MARGIN = c(1, 2), FUN = mean)
-#        for (k in 1:p) tmp_support[[k]] <- which(exceed_cutoff_probs[, k, cutoff] >= 0.5)
-#        support[[cutoff]] <- tmp_support
-#    }
-#    return(list(exceed_cutoff_probs = exceed_cutoff_probs, support = support))
-#}
-
-#Modification of Sameer Deshpande's get_beta_support at https://github.com/skdeshpande91/VCBART
-# - Corrects a bug that caused it to crash when R=1 (dimension of z)
-# - Requires a single MCMC run, rather reporting the average across 2 MCMC runs
-# Input: chain1 is the output from VCBART, burn the number of burn-in iterations
-# Output: posterior mean, sd, and 0.95 interval for each observation's mean
-#my_summarize_beta= function (chain1, burn) {
-#    N_train <- dim(chain1$beta_train_samples)[1]
-#    N_test <- dim(chain1$beta_test_samples)[1]
-#    p <- dim(chain1$beta_train_samples)[2]
-#    beta_summary_train <- array(dim = c(N_train, 4, p), dimnames = list(c(), c("MEAN", "SD", "L95", "U95"), c()))
-#    beta_summary_test <- array(dim = c(N_test, 4, p), dimnames = list(c(), c("MEAN", "SD", "L95", "U95"), c()))
-#    for (k in 1:p) {
-#        beta_summary_train[, "MEAN", k] <- apply(chain1$beta_train_samples[, k, ], FUN=mean, MARGIN=1, na.rm=TRUE)
-#        beta_summary_train[, "SD", k] <- apply(chain1$beta_train_samples[, k, ], FUN = sd, MARGIN = 1, na.rm = TRUE)
-#        beta_summary_train[, "L95", k] <- apply(chain1$beta_train_samples[, k, ], FUN = quantile, MARGIN = 1, probs = 0.025)
-#        beta_summary_train[, "U95", k] <- apply(chain1$beta_train_samples[, k, ], FUN = quantile, MARGIN = 1, probs = 0.975)
-#        beta_summary_test[, "MEAN", k] <- apply(chain1$beta_test_samples[, k, ], FUN = mean, MARGIN = 1, na.rm = TRUE)
-#        beta_summary_test[, "SD", k] <- apply(chain1$beta_test_samples[, k, ], FUN = sd, MARGIN = 1, na.rm = TRUE)
-#        beta_summary_test[, "L95", k] <- apply(chain1$beta_test_samples[, k, ], FUN = quantile, MARGIN = 1, probs = 0.025)
-#        beta_summary_test[, "U95", k] <- apply(chain1$beta_test_samples[, k, ], FUN = quantile, MARGIN = 1, probs = 0.975)
-#    }
-#    return(list(train = beta_summary_train, test = beta_summary_test))
-#}
-
-#Proportion of simulations in which a variable j for various cutoffs, ranging from 1 to max_cutoff
-# Variable inclusion is based on the marginal posterior probability of being in >=cutoff trees. When said probability is > 0.95, the variable in considered included
-# - j: index of the variable
-# - max_cutoff: maximum cutoff to consider
-#prop_rejected_vcbart= function(j, max_cutoff=50) {
-#    ans= rowMeans(sapply(sim.vcbart, function(zz) zz$margpp[j+1, 1:max_cutoff] > 0.95))  #use j+1 since 1st variable is the intercept
-#    return(ans)
-#}
 
 
 
@@ -268,6 +280,34 @@ save(sim, file=here("code", "simulation_iid_output", paste0("sim_n", n,".RData")
 n=1000; p=10; sd.error=0.25; nsims= 100
 sim= lapply(1:nsims, function(i) { ans= sim_localnulltest(seed=i, n=n, p=p, sd.error=sd.error, mc.cores = mc.cores); cat("."); return(ans) })
 save(sim, file=here("code", "simulation_iid_output", paste0("sim_n", n,".RData")))
+
+
+###############################################################################
+## RUN SIMULATIONS FOR GAM
+###############################################################################
+
+#Simulations with n=100, default knots (k=12)
+n=100; p=10; sd.error=0.25; nsims= 100
+sim= lapply(1:nsims, function(i) { ans= sim_localnulltest_gam(seed=i, n=n, p=p, sd.error=sd.error, level=0.95); cat("."); return(ans) })
+save(sim, file=here("code", "simulation_iid_output", paste0("sim_gam_n", n,".RData")))
+
+
+#Simulations with n=1000, default knots (k=12)
+n=1000; p=10; sd.error=0.25; nsims= 100
+sim= lapply(1:nsims, function(i) { ans= sim_localnulltest_gam(seed=i, n=n, p=p, sd.error=sd.error, level=0.95); cat("."); return(ans) })
+save(sim, file=here("code", "simulation_iid_output", paste0("sim_gam_n", n,".RData")))
+
+
+#Simulations with n=100, k=24 knots
+n=100; p=10; sd.error=0.25; nsims= 100; k=24
+sim= lapply(1:nsims, function(i) { ans= sim_localnulltest_gam(seed=i, n=n, p=p, sd.error=sd.error, level=0.95, k=k); cat("."); return(ans) })
+save(sim, file=here("code", "simulation_iid_output", paste0("sim_gam_knots",k,"_n", n,".RData")))
+
+
+#Simulations with n=1000, k=24 knots
+n=1000; p=10; sd.error=0.25; nsims= 100; k=24
+sim= lapply(1:nsims, function(i) { ans= sim_localnulltest_gam(seed=i, n=n, p=p, sd.error=sd.error, level=0.95, k=k); cat("."); return(ans) })
+save(sim, file=here("code", "simulation_iid_output", paste0("sim_gam_knots",k,"_n", n,".RData")))
 
 
 ###############################################################################
@@ -326,6 +366,7 @@ df= data.frame(id, pow0, pow3) |>
 tab= summarize(df, cut0=mean(pow0), uncut3=mean(pow3))
 
 
+# n=100, BH
 load("code/simulation_iid_output/sim_ols_n100.RData")
 pval= do.call(cbind, lapply(sim, function(z) z$pvalue.adjusted))
 pow= rowMeans(pval < .05, na.rm=TRUE)
@@ -338,6 +379,30 @@ df= data.frame(sim[[1]][,c('varname','zmin','zmax')], pow) |>
 tab.pval= summarize(df, pval=mean(pow, na.rm=TRUE))
 
 
+# n=100, GAM default knots
+load("code/simulation_iid_output/sim_gam_n100.RData")
+pow.gam= rowMeans(sapply(sim, function(z) rej= (z$ci$ci.low > 0) | (z$ci$ci.up < 0)))
+
+df= data.frame(sim[[1]]$ci[,c('varname','z')], pow.gam) |>
+  mutate(region= cut(z, breaks=c(-3.01,-2,-1,0,1,2,3.01)), covariate1= (varname==1)) |>
+  group_by(covariate1, region)
+
+tab.gam= summarize(df, pow.gam= mean(pow.gam))
+
+
+# n=100, GAM k=24 knots
+load("code/simulation_iid_output/sim_gam_knots24_n100.RData")
+pow.gam= rowMeans(sapply(sim, function(z) rej= (z$ci$ci.low > 0) | (z$ci$ci.up < 0)))
+
+df= data.frame(sim[[1]]$ci[,c('varname','z')], pow.gam) |>
+  mutate(region= cut(z, breaks=c(-3.01,-2,-1,0,1,2,3.01)), covariate1= (varname==1)) |>
+  group_by(covariate1, region)
+
+tab.gam= summarize(df, pow.gam= mean(pow.gam))
+
+
+
+# n=100, VC-BART
 n=100
 load("code", "simulation_iid_output", paste0("sim_vcbart_n", n,".RData"))
 names(sim.vcbart[[1]])
@@ -371,6 +436,7 @@ df= data.frame(id, pow0, pow3) |>
 tab= summarize(df, cut0=mean(pow0), uncut3=mean(pow3))
 
 
+# n=1000, BH
 load("code/simulation_iid_output/sim_ols_n1000.RData")
 pval= do.call(cbind, lapply(sim, function(z) z$pvalue.adjusted))
 pow= rowMeans(pval < .05, na.rm=TRUE)
@@ -383,6 +449,29 @@ df= data.frame(sim[[1]][,c('varname','zmin','zmax')], pow) |>
 tab.pval= summarize(df, pval=mean(pow, na.rm=TRUE))
 
 
+# n=1000, GAM default knots
+load("code/simulation_iid_output/sim_gam_n1000.RData")
+pow.gam= rowMeans(sapply(sim, function(z) rej= (z$ci$ci.low > 0) | (z$ci$ci.up < 0)))
+
+df= data.frame(sim[[1]]$ci[,c('varname','z')], pow.gam) |>
+  mutate(region= cut(z, breaks=c(-3.01,-2,-1,0,1,2,3.01)), covariate1= (varname==1)) |>
+  group_by(covariate1, region)
+
+tab.gam= summarize(df, pow.gam= mean(pow.gam))
+
+
+# n=1000, GAM k=24 knots
+load("code/simulation_iid_output/sim_gam_knots24_n1000.RData")
+pow.gam= rowMeans(sapply(sim, function(z) rej= (z$ci$ci.low > 0) | (z$ci$ci.up < 0)))
+
+df= data.frame(sim[[1]]$ci[,c('varname','z')], pow.gam) |>
+  mutate(region= cut(z, breaks=c(-3.01,-2,-1,0,1,2,3.01)), covariate1= (varname==1)) |>
+  group_by(covariate1, region)
+
+tab.gam= summarize(df, pow.gam= mean(pow.gam))
+
+
+# n=1000, VC-BART
 n=1000
 load("code", "simulation_iid_output", paste0("sim_vcbart_n", n,".RData"))
 names(sim.vcbart[[1]])
@@ -404,21 +493,29 @@ cbind(filter(tab, covariate1)[,-1], filter(tab, !covariate1)[,-1:-2])
 ## MSE
 ###############################################################################
 
-mse= matrix(NA, nrow=2, ncol=3)
+mse= matrix(NA, nrow=2, ncol=5)
 rownames(mse)= c('n=100', 'n=1000')
-colnames(mse)= c('cut0', 'uncut3', 'VC-BART')
+colnames(mse)= c('cut0', 'uncut3', 'VC-BART','GAM','GAM (k=24)')
 
 n=100
 load(here("code", "simulation_iid_output", paste0("sim_n", n,".RData")))
 load(here("code", "simulation_iid_output", paste0("sim_vcbart_n", n,".RData")))
 mse["n=100",1:2]= colMeans(do.call(rbind,lapply(sim, "[[", "mse"))) / n
 mse["n=100","VC-BART"]= mean(sapply(sim.vcbart, "[[", "mse")) / n
+load("code/simulation_iid_output/sim_gam_n100.RData")
+mse["n=100","GAM"]= mean(sapply(sim, "[[", "mse")) / n
+load("code/simulation_iid_output/sim_gam_knots24_n100.RData")
+mse["n=100","GAM (k=24)"]= mean(sapply(sim, "[[", "mse")) / n
 
 n=1000
 load(here("code", "simulation_iid_output", paste0("sim_n", n,".RData")))
 load(here("code", "simulation_iid_output", paste0("sim_vcbart_n", n,".RData")))
 mse["n=1000",1:2]= colMeans(do.call(rbind,lapply(sim, "[[", "mse"))) / n
 mse["n=1000","VC-BART"]= mean(sapply(sim.vcbart, "[[", "mse")) / n
+load("code/simulation_iid_output/sim_gam_n1000.RData")
+mse["n=1000","GAM"]= mean(sapply(sim, "[[", "mse")) / n
+load("code/simulation_iid_output/sim_gam_knots24_n1000.RData")
+mse["n=1000","GAM (k=24)"]= mean(sapply(sim, "[[", "mse")) / n
 
 
 library(xtable)
@@ -431,8 +528,7 @@ xtable(sqrt(mse), digits=c(0,3,3,3))
 ## PLOTS FOR n=100
 ###############################################################################
 
-#textsize= 18
-textsize= 35
+textsize= 30
 load("code/simulation_iid_output/sim_n100.RData")
 id= sim[[1]]$margpp[,c('covariate','z')]
 pp0= do.call(cbind, lapply(sim, function(z) z$margpp[,'cut0']))
@@ -452,6 +548,12 @@ load("code/simulation_iid_output/sim_vcbart_n100.RData")
 threshold=0
 pow.vcbart= rowMeans(sapply(sim.vcbart, function(z, threshold=threshold) rej= (z$beta.ci[,'low'] > 0) | (z$beta.ci[,'up']<0)))
 df.vcbart= data.frame(sim.vcbart[[1]]$beta.ci[,c('variable','z')], pow.vcbart)
+
+#Power for GAM
+load("code/simulation_iid_output/sim_gam_n100.RData")
+pow.gam= rowMeans(sapply(sim, function(z) rej= (z$ci$ci.low > 0) | (z$ci$ci.up < 0)))
+df.gam= data.frame(sim[[1]]$ci[,c('varname','z')], pow.gam)
+
 
 
 
@@ -500,7 +602,11 @@ df1.vcbart= filter(df.vcbart, variable==1) |>
   transform(Method='VC-BART', pow=pow.vcbart, Covariate=paste('x',variable,sep='')) |>
   select(z, Method, pow, Covariate)
 
-df1= rbind(df1, df1.vcbart)
+df1.gam= filter(df.gam, varname==1) |>
+  transform(Method='GAM', pow=pow.gam, Covariate=paste('x',varname,sep='')) |>
+  select(z, Method, pow, Covariate)
+
+df1= rbind(df1, df1.vcbart, df1.gam)
 
 df2= tibble(id, pow0, pow3) |>
     filter(covariate != 1) |>
@@ -515,7 +621,13 @@ df2.vcbart= filter(df.vcbart, variable!=1) |>
   transform(Method='VC-BART', Covariate="x2-x10") |>
   select(z, Method, pow, Covariate)
 
-df2= rbind(df2, df2.vcbart)
+df2.gam= filter(df.gam, varname!=1) |>
+  group_by(z) |>
+  summarize(pow= mean(pow.gam)) |>
+  transform(Method='GAM', Covariate="x2-x10") |>
+  select(z, Method, pow, Covariate)
+
+df2= rbind(df2, df2.vcbart, df2.gam)
 
 df= rbind(df1, df2) |>
     transform(group= paste(Method,Covariate,sep=", "))
@@ -553,6 +665,11 @@ load("code/simulation_iid_output/sim_vcbart_n1000.RData")
 threshold=0
 pow.vcbart= rowMeans(sapply(sim.vcbart, function(z, threshold=threshold) rej= (z$beta.ci[,'low'] > 0) | (z$beta.ci[,'up']<0)))
 df.vcbart= data.frame(sim.vcbart[[1]]$beta.ci[,c('variable','z')], pow.vcbart)
+
+#Power for GAM
+load("code/simulation_iid_output/sim_gam_n1000.RData")
+pow.gam= rowMeans(sapply(sim, function(z) rej= (z$ci$ci.low > 0) | (z$ci$ci.up < 0)))
+df.gam= data.frame(sim[[1]]$ci[,c('varname','z')], pow.gam)
 
 
 
@@ -601,7 +718,11 @@ df1.vcbart= filter(df.vcbart, variable==1) |>
   transform(Method='VC-BART', pow=pow.vcbart, Covariate=paste('x',variable,sep='')) |>
   select(z, Method, pow, Covariate)
 
-df1= rbind(df1, df1.vcbart)
+df1.gam= filter(df.gam, varname==1) |>
+  transform(Method='GAM', pow=pow.gam, Covariate=paste('x',varname,sep='')) |>
+  select(z, Method, pow, Covariate)
+
+df1= rbind(df1, df1.vcbart, df1.gam)
 
 df2= tibble(id, pow0, pow3) |>
     filter(covariate != 1) |>
@@ -616,7 +737,13 @@ df2.vcbart= filter(df.vcbart, variable!=1) |>
   transform(Method='VC-BART', Covariate="x2-x10") |>
   select(z, Method, pow, Covariate)
 
-df2= rbind(df2, df2.vcbart)
+df2.gam= filter(df.gam, varname!=1) |>
+  group_by(z) |>
+  summarize(pow= mean(pow.gam)) |>
+  transform(Method='GAM', Covariate="x2-x10") |>
+  select(z, Method, pow, Covariate)
+
+df2= rbind(df2, df2.vcbart, df2.gam)
 
 df= rbind(df1, df2) |>
     transform(group= paste(Method,Covariate,sep=", "))
@@ -628,7 +755,5 @@ ggplot(df, aes(x=z, y=pow)) +
     theme(axis.text=element_text(size=textsize), axis.title=element_text(size=textsize), legend.title=element_text(size=textsize), legend.text=element_text(size=textsize), legend.position=c(.17,.8), legend.key.width=unit(1.7,'cm'))
 
 ggsave("drafts/figs/simiid_pow_n1000.pdf")
-
-
 
 
