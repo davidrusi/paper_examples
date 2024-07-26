@@ -57,8 +57,10 @@ k= fit0$regionbounds[[1]][[1]] #knots of the local test basis
 
 
 #Projection of the true mean on the spline basis
-mproj= predict(lm(m ~ fit0$ms[[1]]$xstd))   #cut basis
-mproj.uncut= predict(lm(m ~ fit0.uncut$ms[[1]]$xstd)) #uncut basis
+w0= mombf:::bspline(z, degree=3, knots=seq(-4,4,length=20))
+w1= x[,1] * w0
+w= cbind(w0, w1)
+mproj.uncut= predict(lm(m ~ w)) #uncut basis
 
 
 #Plot true means & uncut cubic spline projection

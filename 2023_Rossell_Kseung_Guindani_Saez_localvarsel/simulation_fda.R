@@ -17,10 +17,14 @@ library(here)
 library(ggrepel)
 library(ggplot2)
 setwd("~/github/localnulltest/code")
+source("routines.R")
 library(reshape2)
 library(gridExtra)
 source("lfmm/R/mcmc_fcts.R")
 sourceCpp("lfmm/src/mcmc_fcts.cpp")
+#library(devtools)
+#devtools::install_github(repo = "skdeshpande91/VCBART/VCBART")
+library(VCBART)
 
 
 
@@ -100,6 +104,59 @@ sim_localnulltest_fda= function(seed, nindiv, npoints, p, rho, single=FALSE, pri
     margpp= b[,c('covariate','z1','estimate','margpp')]
     colnames(margpp)= c('covariate','z','estimate','cut0')
     ans= list(margpp=margpp, mse=mse)
+    return(ans)
+}
+
+
+###############################################################################
+## VC-BART FUNCTIONS
+###############################################################################
+
+sim_vcbart_fda= function(seed, nindiv, npoints, p, rho, single=FALSE) {
+    set.seed(seed)
+    sim= simdata_fda(seed=seed, nindiv=nindiv, npoints=npoints, p=p, rho=rho)
+    test= integer(0)
+    if (single) {
+        xtrain= sim$x[,1,drop=FALSE]
+        xtest= sim$x[test,1,drop=FALSE]
+    } else {
+        xtrain= sim$x
+        xtest= sim$x[test,,drop=FALSE]
+    }
+    z= matrix((sim$z - min(sim$z))/(max(sim$z) - min(sim$z)), ncol=1) #re-scale z to lie in [0,1]
+    cutpoints= list(seq(min(sim$z), max(sim$z), length=1000))
+    nd= 1000 #number of MCMC iterations
+    ztest= matrix(seq(min(z), max(z), length=100), ncol=1)
+    #Run VCBART and obtain posterior summaries
+    bartfit= VCBART_cs(Y_train=sim$y, ni_train= table(sim$function_id), subj_id_train=sim$function_id, X_train=xtrain, Z_cont_train=z, X_test=xtest, Z_cont_test=ztest, cutpoints=cutpoints, nd=nd, verbose=FALSE)
+    betahat= summarize_beta(bartfit$betahat.train)
+    #Obtain estimates and intervals for local effects
+    zseq= seq(min(z), max(z), length=100)
+    localeffects= predict_betas(bartfit, Z_cont=zseq, verbose = FALSE)
+    ci= vector("list", ncol(xtrain))
+    for (j in 1:ncol(xtrain)) {
+        ci[[j]]= matrix(NA,nrow=dim(localeffects)[2],ncol=5)
+        colnames(ci[[j]])= c('variable','z','mean','low','up')
+        ci[[j]][,'variable']= j
+        ci[[j]][,'z']= zseq 
+        for (k in 1:nrow(ci[[j]])) {
+          #effect of covariate j at ztest[k]
+          ci[[j]][k,3:5]= c(mean(localeffects[,k,j+1]), quantile(localeffects[,k,j+1], probs=c(.025,.975)))
+        }
+    }
+    ci= do.call(rbind,ci)
+    #MSE for true expectation
+    muhat= betahat[,1,1] + rowSums(xtrain * betahat[,1,-1])
+    mse= sum((muhat - sim$m)^2)  #MSE in estimating the mean
+    #Return z to original scale
+    betahat.ci= data.frame(zorig=unique(sim$z), z=unique(ztest)) |>
+                    left_join(data.frame(ci), by='z') |>
+                    arrange(variable, z) |>
+                    relocate(variable, z) |>
+                    select(-z) |>
+                    rename(z=zorig)
+    #Return output
+    ans= list(beta.ci=betahat.ci, mse=mse)
     return(ans)
 }
 
@@ -233,7 +290,7 @@ for (i in 1:nsims) {
     sim[[i]]= sim_localnulltest_fda(seed=i, nindiv=nindiv, npoints=npoints, p=p, rho=rho, priorCoef=momprior(), priorGroup=groupmomprior())
     setTxtProgressBar(pb, i/nsims)
 }
-#save(sim, file=paste0("~/github/localnulltest/code/simulation_fda_output/sim_pmom_nindiv_",nindiv,".RData"))
+save(sim, file=paste0("~/github/localnulltest/code/simulation_fda_output/sim_pmom_nindiv_",nindiv,".RData"))
 
 
 nindiv= 100; npoints= 100; p=10; rho=0.99; nsims=100
@@ -243,7 +300,7 @@ for (i in 1:nsims) {
     sim[[i]]= sim_localnulltest_fda(seed=i, nindiv=nindiv, npoints=npoints, p=p, rho=rho, priorCoef=momprior(), priorGroup=groupmomprior())
     setTxtProgressBar(pb, i/nsims)
 }
-#save(sim, file=paste0("~/github/localnulltest/code/simulation_fda_output/sim_pmom_nindiv_",nindiv,".RData"))
+save(sim, file=paste0("~/github/localnulltest/code/simulation_fda_output/sim_pmom_nindiv_",nindiv,".RData"))
 
 
 # Only using X1
@@ -266,6 +323,56 @@ for (i in 1:nsims) {
     setTxtProgressBar(pb, i/nsims)
 }
 save(sim, file=paste0("~/github/localnulltest/code/simulation_fda_output/sim_pmom_single_nindiv_",nindiv,".RData"))
+
+
+
+###############################################################################
+## RUN SIMULATIONS FOR VC-BART
+###############################################################################
+
+# Using all covariates
+
+nindiv= 50; npoints= 100; p=10; rho=0.99; nsims=100
+pb= txtProgressBar()
+sim= vector("list", nsims)
+for (i in 1:nsims) {
+  sim[[i]]= sim_vcbart_fda(seed=i, nindiv=nindiv, npoints=npoints, p=p, rho=rho)
+  setTxtProgressBar(pb, i/nsims)
+save(sim, file=paste0("~/github/localnulltest/code/simulation_fda_output/sim_vcbart_nindiv_",nindiv,".RData"))
+}
+
+
+nindiv= 100; npoints= 100; p=10; rho=0.99; nsims=20
+pb= txtProgressBar()
+sim= vector("list", nsims)
+for (i in 1:nsims) {
+  sim[[i]]= sim_vcbart_fda(seed=i, nindiv=nindiv, npoints=npoints, p=p, rho=rho)
+  setTxtProgressBar(pb, i/nsims)
+save(sim, file=paste0("~/github/localnulltest/code/simulation_fda_output/sim_vcbart_nindiv_",nindiv,".RData"))
+}
+
+
+# Only using X1
+
+nindiv= 50; npoints= 100; p=10; rho=0.99; nsims=100
+pb= txtProgressBar()
+sim= vector("list", nsims)
+for (i in 1:nsims) {
+  sim[[i]]= sim_vcbart_fda(seed=i, nindiv=nindiv, npoints=npoints, p=p, rho=rho, single=TRUE)
+  setTxtProgressBar(pb, i/nsims)
+}
+save(sim, file=paste0("~/github/localnulltest/code/simulation_fda_output/sim_vcbart_single_nindiv_",nindiv,".RData"))
+
+
+nindiv= 100; npoints= 100; p=10; rho=0.99; nsims=100
+pb= txtProgressBar()
+sim= vector("list", nsims)
+for (i in 1:nsims) {
+  sim[[i]]= sim_vcbart_fda(seed=i, nindiv=nindiv, npoints=npoints, p=p, rho=rho, single=TRUE)
+  setTxtProgressBar(pb, i/nsims)
+}
+save(sim, file=paste0("~/github/localnulltest/code/simulation_fda_output/sim_vcbart_single_nindiv_",nindiv,".RData"))
+
 
 
 
@@ -309,7 +416,6 @@ save(sim, file=paste0("~/github/localnulltest/code/simulation_fda_output/sim_van
 ###############################################################################
 
 textsize= 22
-#textsize= 35
 
 ## POSTERIOR PROBABILITIES ##
 #############################
@@ -362,7 +468,6 @@ ggsave(paste0("../drafts/figs/simfda_pp_single_nindiv",nindiv,".pdf"))
 ## SUMMARIZE TYPE I ERROR AND POWER
 ###############################################################################
 
-
 ## OUR METHOD, USING ONLY COVARIATE 1 ##
 ########################################
 
@@ -373,6 +478,24 @@ pow= data.frame(sim[[1]]$margpp[,1:2], pow=rowMeans(pp > 0.95))
 df= mutate(pow, region= cut(z, breaks=c(-3.01,-2,-1,0,1,2,3))) |>
   group_by(region)
 tab= summarize(df, cut0=mean(pow))
+tab
+
+
+## VC-BART, USING ONLY COVARIATE 1 ##
+#####################################
+
+nindiv= 50
+load(paste0("simulation_fda_output/sim_vcbart_single_nindiv_",nindiv,".RData"))
+
+threshold= 0
+pow.vcbart= rowMeans(sapply(sim, function(z, threshold=threshold) rej= (z$beta.ci[,'low'] > 0) | (z$beta.ci[,'up']<0)))
+
+df= data.frame(sim[[1]]$beta.ci[,c('variable','z')], pow.vcbart) |>
+  mutate(region= cut(z, breaks=c(-3.01,-2,-1,0,1,2,3.01)), covariate1= (variable==1)) |>
+  group_by(covariate1, region)
+
+tab.vcbart= summarize(df, pow.vcbart= mean(pow.vcbart))
+tab.vcbart
 
 
 ## LFMM, USING ONLY COVARITE 1 ##
@@ -385,7 +508,8 @@ pow.lfmm= data.frame(z=z.lfmm, pow=pow.lfmm)
 
 df.lfmm= mutate(pow.lfmm, region= cut(z, breaks=c(-3.01,-2,-1,0,1,2,3))) |>
   group_by(region)
-tab= summarize(df.lfmm, lfmm=mean(pow))
+tab.lfmm= summarize(df.lfmm, lfmm=mean(pow))
+tab.lfmm
 
 
 ## PINI & VANTINI, USING ONLY COVARIATE 1 ##
@@ -399,6 +523,7 @@ pow.piva= data.frame(z=z.piva, pow=pow.piva)
 df.piva= mutate(pow.piva, region= cut(z, breaks=c(-3.01,-2,-1,0,1,2,3))) |>
   group_by(region)
 tab= summarize(df.piva, piva=mean(pow))
+tab.piva
 
 nindiv= 100
 load(paste0("simulation_fda_output/sim_vantini_nindiv_",nindiv,".RData"))
@@ -408,6 +533,7 @@ pow.piva= data.frame(z=z.piva, pow=pow.piva)
 df.piva= mutate(pow.piva, region= cut(z, breaks=c(-3.01,-2,-1,0,1,2,3))) |>
   group_by(region)
 tab= summarize(df.piva, piva=mean(pow))
+tab.piva
 
 
 ## OUR METHOD, USING ALL COVARIATES ##
@@ -431,4 +557,32 @@ df= mutate(pow, region= cut(z, breaks=c(-3,-2,-1,0,1,2,3)), covariate1= (covaria
 tab= summarize(df, cut0=mean(pow))
 
 
+## VC-BART, USING ALL COVARIATES ##
+###################################
 
+nindiv= 50
+load(paste0("simulation_fda_output/sim_vcbart_nindiv_",nindiv,".RData"))
+
+threshold= 0
+pow.vcbart= rowMeans(sapply(sim, function(z, threshold=threshold) rej= (z$beta.ci[,'low'] > 0) | (z$beta.ci[,'up']<0)))
+
+df= data.frame(sim[[1]]$beta.ci[,c('variable','z')], pow.vcbart) |>
+  mutate(region= cut(z, breaks=c(-3.01,-2,-1,0,1,2,3.01)), covariate1= (variable==1)) |>
+  group_by(covariate1, region)
+
+tab.vcbart= summarize(df, pow.vcbart= mean(pow.vcbart))
+tab.vcbart
+
+
+nindiv= 100
+load(paste0("simulation_fda_output/sim_vcbart_nindiv_",nindiv,".RData"))
+
+threshold= 0
+pow.vcbart= rowMeans(sapply(sim, function(z, threshold=threshold) rej= (z$beta.ci[,'low'] > 0) | (z$beta.ci[,'up']<0)))
+
+df= data.frame(sim[[1]]$beta.ci[,c('variable','z')], pow.vcbart) |>
+  mutate(region= cut(z, breaks=c(-3.01,-2,-1,0,1,2,3.01)), covariate1= (variable==1)) |>
+  group_by(covariate1, region)
+
+tab.vcbart= summarize(df, pow.vcbart= mean(pow.vcbart))
+tab.vcbart
