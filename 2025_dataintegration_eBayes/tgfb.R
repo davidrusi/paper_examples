@@ -60,6 +60,12 @@ cor(msloo.eb$pred, y)^2  # Empirical Bayes
 cor(msloo.bb, y)^2       # Beta-Binomial
 
 
+# Confidence interval for hyper-parameters
+
+hist(msloo.eb$hyperpar[,2])
+quantile(msloo.eb$hyperpar[,2], prob=c(0.025,0.975))
+
+
 # Prior inclusion probability for genes out/in the short list
 
 priorprob= 1/(1 + exp(-ms.eb$Z %*% ms.eb$eBayes_hyperpar))
