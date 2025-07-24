@@ -7,10 +7,13 @@ source("routines.R")
 
 # Import data (first you should unzip tgfb.zip)
 
-x= read.table("~/github/dataintegration_test/data/tgfb.txt", header=TRUE)
-shortlist= as.character(read.table("~/github/dataintegration_test/data/mouse_shortlist.txt", header=TRUE)[,1])
+x= read.table("tgfb.txt", header=TRUE)
+shortlist= as.character(read.table("mouse_shortlist.txt", header=TRUE)[,1])
+y= x[,1]  #First column is the output gene TGFB
+x= x[,-1] #Other columns are the 1,000 genes
 inshort= (colnames(x) %in% shortlist)
 Z= matrix(inshort, ncol=1)
+
 
 
 # Exploratory analysis. Marginal correlations with TGFB vs. found in mouse study yes/no
