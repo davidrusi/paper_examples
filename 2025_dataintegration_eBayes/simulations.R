@@ -51,13 +51,13 @@ for (i in 1:nrow(simpars)) {
   theta.min <- simpars[i,'theta.min']; theta.max <- simpars[i,'theta.max']
   fname= paste('../data/lmsim_',scenario,'_p',p,'_n',n,'_rho',rho,'.RData',sep='')
   # Bayesian methods with pMOM prior on regression coefficient
-  sim.eb= mclapply(1:nsim, simBMA, p=p, n=n, eBayes='all', theta.min=theta.min, theta.max=theta.max, rho=rho, niter=1000, niter.mstep=1000, mc.cores=mc.cores, mc.preschedule=FALSE)
-  sim.eb0= mclapply(1:nsim, simBMA, p=p, n=n, eBayes='intercept', theta.min=theta.min, theta.max=theta.max, rho=rho, niter=1000, niter.mstep=1000, mc.cores=mc.cores, mc.preschedule=FALSE)
-  sim.bb= mclapply(1:nsim, simBMA, p=p, n=n, eBayes='none', priorDelta=modelbbprior(), theta.min=theta.min, theta.max=theta.max, rho=rho, niter=1000, niter.mstep=1000, mc.cores=mc.cores, mc.preschedule=FALSE)
+  sim.eb= mclapply(1:nsim, simBMA, p=p, n=n, eBayes='all', theta.min=theta.min, theta.max=theta.max, rho=rho, niter=5000, niter.mstep=1000, mc.cores=mc.cores, mc.preschedule=FALSE)
+  sim.eb0= mclapply(1:nsim, simBMA, p=p, n=n, eBayes='intercept', theta.min=theta.min, theta.max=theta.max, rho=rho, niter=5000, niter.mstep=1000, mc.cores=mc.cores, mc.preschedule=FALSE)
+  sim.bb= mclapply(1:nsim, simBMA, p=p, n=n, eBayes='none', priorDelta=modelbbprior(), theta.min=theta.min, theta.max=theta.max, rho=rho, niter=5000, niter.mstep=1000, mc.cores=mc.cores, mc.preschedule=FALSE)
   # Bayesian methods with Zellner's prior on regression coefficient
-  sim.ebz= mclapply(1:nsim, simBMA, p=p, n=n, eBayes='all', priorCoef=zellnerprior(), theta.min=theta.min, theta.max=theta.max, rho=rho, niter=1000, niter.mstep=1000, mc.cores=mc.cores, mc.preschedule=FALSE)
-  sim.ebz0= mclapply(1:nsim, simBMA, p=p, n=n, eBayes='intercept', priorCoef=zellnerprior(), theta.min=theta.min, theta.max=theta.max, rho=rho, niter=1000, niter.mstep=1000, mc.cores=mc.cores, mc.preschedule=FALSE)
-  sim.bbz= mclapply(1:nsim, simBMA, p=p, n=n, eBayes='none', priorCoef=zellnerprior(), priorDelta=modelbbprior(), theta.min=theta.min, theta.max=theta.max, rho=rho, niter=1000, niter.mstep=1000, mc.cores=mc.cores, mc.preschedule=FALSE)
+  sim.ebz= mclapply(1:nsim, simBMA, p=p, n=n, eBayes='all', priorCoef=zellnerprior(), theta.min=theta.min, theta.max=theta.max, rho=rho, niter=5000, niter.mstep=1000, mc.cores=mc.cores, mc.preschedule=FALSE)
+  sim.ebz0= mclapply(1:nsim, simBMA, p=p, n=n, eBayes='intercept', priorCoef=zellnerprior(), theta.min=theta.min, theta.max=theta.max, rho=rho, niter=5000, niter.mstep=1000, mc.cores=mc.cores, mc.preschedule=FALSE)
+  sim.bbz= mclapply(1:nsim, simBMA, p=p, n=n, eBayes='none', priorCoef=zellnerprior(), priorDelta=modelbbprior(), theta.min=theta.min, theta.max=theta.max, rho=rho, niter=5000, niter.mstep=1000, mc.cores=mc.cores, mc.preschedule=FALSE)
   # Penalized likelihood methods
   sim.lasso <- mclapply(1:nsim, simPenLhood, p=p, n=n, theta.min=theta.min, theta.max=theta.max, rho=rho, method='LASSO', mc.cores=mc.cores, mc.preschedule=FALSE)
   sim.alasso <- mclapply(1:nsim, simPenLhood, p=p, n=n, theta.min=theta.min, theta.max=theta.max, rho=rho, method='ADALASSO', mc.cores=mc.cores, mc.preschedule=FALSE)
