@@ -1,7 +1,11 @@
 # paper_examples
 This repository contains code to reproduce examples in research papers authored by David Rossell. Currently there is code for the following papers
 
-Rossell D, Kseung A, Saez I, Guindani M. Semi-parametric local variable selection under misspecification
+Sulem D, Jewson J, Rossell D. Bayesian computation for high-dimensional Gaussian graphical models with spike-and-slab priors (2025)
+
+Rognon-Vael P, Rossell D. Empirical Bayes for Data Integration (2025). arxiv 2508.08336 
+
+Rossell D, Kseung A, Saez I, Guindani M. Semi-parametric local variable selection under misspecification (2025). Biometrika, 112(2) asa068. 
 
 Rossell D. Discussion of Martingale Posterior distributions by Edwin Fong, Chris Holmes and Stephen G. Walker. Journal of the Royal Statistical Society B (2022)
 
