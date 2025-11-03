@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.2.269">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="author" content="David Rossell">
+
+<title>Local null testing example</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1.6em;
+  vertical-align: middle;
+}
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+    color: #aaaaaa;
+  }
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } /* Alert */
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+code span.at { color: #7d9029; } /* Attribute */
+code span.bn { color: #40a070; } /* BaseN */
+code span.bu { color: #008000; } /* BuiltIn */
+code span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+code span.ch { color: #4070a0; } /* Char */
+code span.cn { color: #880000; } /* Constant */
+code span.co { color: #60a0b0; font-style: italic; } /* Comment */
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+code span.do { color: #ba2121; font-style: italic; } /* Documentation */
+code span.dt { color: #902000; } /* DataType */
+code span.dv { color: #40a070; } /* DecVal */
+code span.er { color: #ff0000; font-weight: bold; } /* Error */
+code span.ex { } /* Extension */
+code span.fl { color: #40a070; } /* Float */
+code span.fu { color: #06287e; } /* Function */
+code span.im { color: #008000; font-weight: bold; } /* Import */
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+code span.kw { color: #007020; font-weight: bold; } /* Keyword */
+code span.op { color: #666666; } /* Operator */
+code span.ot { color: #007020; } /* Other */
+code span.pp { color: #bc7a00; } /* Preprocessor */
+code span.sc { color: #4070a0; } /* SpecialChar */
+code span.ss { color: #bb6688; } /* SpecialString */
+code span.st { color: #4070a0; } /* String */
+code span.va { color: #19177c; } /* Variable */
+code span.vs { color: #4070a0; } /* VerbatimString */
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+</style>
+
+
+<script src="example_files/libs/clipboard/clipboard.min.js"></script>
+<script src="example_files/libs/quarto-html/quarto.js"></script>
+<script src="example_files/libs/quarto-html/popper.min.js"></script>
+<script src="example_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="example_files/libs/quarto-html/anchor.min.js"></script>
+<link href="example_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="example_files/libs/quarto-html/quarto-syntax-highlighting.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="example_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="example_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="example_files/libs/bootstrap/bootstrap.min.css" rel="stylesheet" id="quarto-bootstrap" data-mode="light">
+
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+
+</head>
+
+<body class="fullcontent">
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">Local null testing example</h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    <div>
+    <div class="quarto-title-meta-heading">Author</div>
+    <div class="quarto-title-meta-contents">
+             <p>David Rossell </p>
+          </div>
+  </div>
+    
+  
+    
+  </div>
+  
+
+</header>
+
+<p>This notebook illustrates how to use function <code>localnulltest</code>. We load required packages and source an auxiliary file <code>routines.R</code> containing <code>localnulltest</code> (this will be incorporated into package <code>mombf</code> later).</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(mombf)</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(parallel)</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyverse)</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="fu">source</span>(<span class="st">'routines.R'</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<p>We will use a simulated example where we wish to test for the effect of two covariates at various coordinates <span class="math inline">\(z \in (-3,3)\)</span>. That is we wish to assess the local null hypothesis <span class="math display">\[
+\beta_j(z) =0
+\]</span> for covariates <span class="math inline">\(j=1,2\)</span>. In our example the first covariate is binary, the second covariate is continuous and the correlation between both covariates is roughly 0.43. The simulation truth is set such that the second covariate truly has no effect on the outcome (i.e.&nbsp;<span class="math inline">\(\beta_2(z)=0\)</span> for all <span class="math inline">\(z\)</span>) and the first covariate has an effect <span class="math inline">\(\beta_1(z) &gt; 0\)</span> for <span class="math inline">\(z&gt;0\)</span> and no effect for <span class="math inline">\(z \leq 0\)</span>.</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>truemean<span class="ot">=</span> <span class="cf">function</span>(x,z) {</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    ans<span class="ot">=</span> <span class="fu">double</span>(<span class="fu">nrow</span>(x))</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    group1<span class="ot">=</span> (x[,<span class="dv">1</span>]<span class="sc">==</span><span class="dv">1</span>)</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    ans[group1]<span class="ot">=</span> <span class="fu">ifelse</span>(z[group1] <span class="sc">&lt;=</span><span class="dv">0</span>, <span class="fu">cos</span>(z[group1]), <span class="dv">1</span>)</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    ans[<span class="sc">!</span>group1]<span class="ot">=</span> <span class="fu">ifelse</span>(z[<span class="sc">!</span>group1]<span class="sc">&lt;=</span><span class="dv">0</span>, <span class="fu">cos</span>(z[<span class="sc">!</span>group1]), <span class="dv">1</span><span class="sc">/</span>(z[<span class="sc">!</span>group1]<span class="sc">+</span><span class="dv">1</span>)<span class="sc">^</span><span class="dv">2</span>)</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    <span class="fu">return</span>(ans)</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>n<span class="ot">=</span> <span class="dv">1000</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>x1<span class="ot">=</span> <span class="fu">rep</span>(<span class="dv">0</span><span class="sc">:</span><span class="dv">1</span>,<span class="fu">c</span>(n<span class="sc">/</span><span class="dv">2</span>,n<span class="sc">/</span><span class="dv">2</span>))</span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>x2<span class="ot">=</span> x1 <span class="sc">+</span> <span class="fu">rnorm</span>(n)</span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>x<span class="ot">=</span> <span class="fu">cbind</span>(x1,x2)</span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>z<span class="ot">=</span> <span class="fu">runif</span>(n,<span class="sc">-</span><span class="dv">3</span>,<span class="dv">3</span>)</span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>m<span class="ot">=</span> <span class="fu">truemean</span>(x,z)</span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>y<span class="ot">=</span> <span class="fu">truemean</span>(x,z) <span class="sc">+</span> <span class="fu">rnorm</span>(n, <span class="dv">0</span>, .<span class="dv">5</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cor</span>(x1,x2)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] 0.4462063</code></pre>
+</div>
+</div>
+<p>The solid lines in the plot below show the true mean of the outcome as a function of <span class="math inline">\(x_1\)</span> and the coordinate <span class="math inline">\(z\)</span>, as well as the simulated observations.</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>sel<span class="ot">=</span> x[,<span class="dv">1</span>]<span class="sc">==</span><span class="dv">1</span>; o<span class="ot">=</span> <span class="fu">order</span>(z[sel])</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(z[sel][o], m[sel][o], <span class="at">ylim=</span><span class="fu">range</span>(y), <span class="at">xlab=</span><span class="st">'z'</span>, <span class="at">ylab=</span><span class="st">'y'</span>, <span class="at">type=</span><span class="st">'l'</span>, <span class="at">lwd=</span><span class="dv">3</span>, <span class="at">cex.axis=</span><span class="fl">1.4</span>, <span class="at">cex.lab=</span><span class="fl">1.4</span>)</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>o<span class="ot">=</span> <span class="fu">order</span>(z[<span class="sc">!</span>sel])</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="fu">lines</span>(z[<span class="sc">!</span>sel][o], m[<span class="sc">!</span>sel][o], <span class="at">col=</span><span class="dv">2</span>, <span class="at">lty=</span><span class="dv">2</span>, <span class="at">lwd=</span><span class="dv">3</span>)</span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>sel<span class="ot">=</span> x[,<span class="dv">1</span>]<span class="sc">==</span><span class="dv">1</span>; <span class="fu">points</span>(z[sel], y[sel]); <span class="fu">points</span>(z[<span class="sc">!</span>sel], y[<span class="sc">!</span>sel], <span class="at">col=</span><span class="dv">2</span>, <span class="at">pch=</span><span class="dv">2</span>)</span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a><span class="fu">legend</span>(<span class="st">'topleft'</span>, <span class="fu">c</span>(<span class="st">'x1=1'</span>,<span class="st">'x1=0'</span>), <span class="at">lty=</span><span class="fu">c</span>(<span class="dv">1</span>,<span class="dv">2</span>), <span class="at">col=</span><span class="fu">c</span>(<span class="dv">1</span>,<span class="dv">2</span>), <span class="at">pch=</span><span class="dv">1</span><span class="sc">:</span><span class="dv">2</span>, <span class="at">cex=</span><span class="fl">1.5</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="example_files/figure-html/unnamed-chunk-4-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+<section id="single-resolution-analysis-single-number-of-local-knots" class="level2">
+<h2 class="anchored" data-anchor-id="single-resolution-analysis-single-number-of-local-knots">Single-resolution analysis (single number of local knots)</h2>
+<p><code>localnulltest</code> has a number of parameters, all of which are set to minimally sensible defaults. A relevant parameter is <code>nlocalknots</code>, which specifies the number of knots by a cut-spline basis to perform the local tests. For example, for a cut-spline basis of degree 0 (the default) setting <code>nlocalknots=10</code> effectively divides the range of z values into 10 intervals, and conducts a separate test for each interval.</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>fit0<span class="ot">=</span> <span class="fu">localnulltest</span>(y, <span class="at">x=</span>x, <span class="at">z=</span>z, <span class="at">nlocalknots=</span><span class="dv">10</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<p>We use functions <code>coef</code> and <code>predict</code> to extract useful information. The former returns a data.frame where, for each covariate and value of <span class="math inline">\(z\)</span> in a grid, returns the posterior probability <span class="math inline">\(P(\beta_j(z) \mid y)\)</span> of there being a local effect (column <code>margpp</code>), as well as point estimates <span class="math inline">\(E(\beta_j(z) \mid y)\)</span> (obtained as Bayesian model averaging posterior means), and 0.95 posterior intervals. The first few rows below show that for small <span class="math inline">\(z\)</span> there is a small probability <span class="math inline">\(P(\beta_1(z) \mid z)\)</span> that covariate 1 has an effect, as we would expect, and that most of the posterior mass is at 0 (specifically, the 0.95 interval is the singleton 0).</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>b<span class="ot">=</span> <span class="fu">coef</span>(fit0)</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(b)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>  covariate      z1      estimate 2.5% 97.5% margpp
+1         1 -2.9640 -0.0003403344    0     0 0.0074
+2         1 -2.9035 -0.0003403344    0     0 0.0074
+3         1 -2.8430 -0.0003403344    0     0 0.0074
+4         1 -2.7830 -0.0003403344    0     0 0.0074
+5         1 -2.7225 -0.0003403344    0     0 0.0074
+6         1 -2.6620 -0.0003403344    0     0 0.0074</code></pre>
+</div>
+</div>
+<p>We visualize the posterior probabilities of there being a local effect for both covariates. These do a good job at recovering the truth, i.e.&nbsp;that only <span class="math inline">\(x_1\)</span> has an effect for <span class="math inline">\(z&gt;0\)</span>.</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>sel<span class="ot">=</span> (b[,<span class="st">'covariate'</span>]<span class="sc">==</span><span class="dv">1</span>)</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(b[sel,<span class="st">'z1'</span>], b[sel,<span class="st">'margpp'</span>], <span class="at">type=</span><span class="st">'l'</span>, <span class="at">xlab=</span><span class="st">'z'</span>, <span class="at">ylab=</span><span class="st">'Posterior probability of a local effect'</span>, <span class="at">cex.lab=</span><span class="fl">1.3</span>)</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="fu">lines</span>(b[<span class="sc">!</span>sel,<span class="st">'z1'</span>], b[<span class="sc">!</span>sel,<span class="st">'margpp'</span>], <span class="at">lty=</span><span class="dv">3</span>)</span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="fu">legend</span>(<span class="st">'topleft'</span>, <span class="fu">c</span>(<span class="st">'x1'</span>,<span class="st">'x2'</span>), <span class="at">lty=</span><span class="fu">c</span>(<span class="dv">1</span>,<span class="dv">3</span>), <span class="at">cex=</span><span class="fl">1.5</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="example_files/figure-html/unnamed-chunk-7-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+<p>It is also possible to compare the estimated local effects versus their true value, again the estimates do a good job at capturing the group differences. Note that the piece-wise constant is given by the choice of using 0-degree cut-splines for the local effects.</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>zseq<span class="ot">=</span> <span class="fu">seq</span>(<span class="sc">-</span><span class="dv">3</span>,<span class="dv">3</span>,<span class="at">length=</span><span class="dv">200</span>)</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>sel<span class="ot">=</span> (b[,<span class="st">'covariate'</span>]<span class="sc">==</span><span class="dv">1</span>)</span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(b[sel,<span class="st">'z1'</span>], b[sel,<span class="st">'estimate'</span>], <span class="at">type=</span><span class="st">'l'</span>, <span class="at">xlab=</span><span class="st">'z'</span>, <span class="at">ylab=</span><span class="st">'Estimated local covariate effects'</span>, <span class="at">cex.lab=</span><span class="fl">1.4</span>, <span class="at">cex.axis=</span><span class="fl">1.4</span>)</span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>mdif<span class="ot">=</span> <span class="fu">truemean</span>(<span class="at">x=</span><span class="fu">matrix</span>(<span class="dv">1</span>,<span class="at">nrow=</span><span class="fu">length</span>(zseq)),<span class="at">z=</span>zseq) <span class="sc">-</span> <span class="fu">truemean</span>(<span class="at">x=</span><span class="fu">matrix</span>(<span class="dv">0</span>,<span class="at">nrow=</span><span class="fu">length</span>(zseq)),<span class="at">z=</span>zseq)</span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a><span class="fu">lines</span>(zseq, mdif, <span class="at">col=</span><span class="st">'gray'</span>)</span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a><span class="fu">lines</span>(b[<span class="sc">!</span>sel,<span class="st">'z1'</span>], b[<span class="sc">!</span>sel,<span class="st">'estimate'</span>], <span class="at">lty=</span><span class="dv">3</span>)</span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a><span class="fu">legend</span>(<span class="st">'topleft'</span>, <span class="fu">c</span>(<span class="st">'Estimate for x1'</span>,<span class="st">'Truth for x1'</span>,<span class="st">'Estimate for x2'</span>), <span class="at">lty=</span><span class="fu">c</span>(<span class="dv">1</span>,<span class="dv">1</span>,<span class="dv">3</span>), <span class="at">col=</span><span class="fu">c</span>(<span class="dv">1</span>,<span class="st">'gray'</span>,<span class="dv">1</span>), <span class="at">cex=</span><span class="fl">1.4</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="example_files/figure-html/unnamed-chunk-8-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+<p>Finally, it can be informative to plot the predicted outcome as a function of <span class="math inline">\(z\)</span> and the covariates. Below we obtain predictions for a grid of <span class="math inline">\(z\)</span> values, <span class="math inline">\(x_1 \in \{0,1\}\)</span>, and <span class="math inline">\(x_2\)</span> being set to its sample mean.</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>znew<span class="ot">=</span> <span class="fu">matrix</span>(<span class="fu">rep</span>(<span class="fu">seq</span>(<span class="sc">-</span><span class="fl">2.9</span>,<span class="fl">2.9</span>,<span class="at">length=</span><span class="dv">50</span>),<span class="dv">2</span>),<span class="at">ncol=</span><span class="dv">1</span>)</span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>xnew<span class="ot">=</span> <span class="fu">cbind</span>(<span class="fu">rep</span>(<span class="dv">0</span><span class="sc">:</span><span class="dv">1</span>,<span class="at">each=</span><span class="fu">nrow</span>(znew)<span class="sc">/</span><span class="dv">2</span>), <span class="fu">mean</span>(x2))</span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>newdata<span class="ot">=</span> <span class="fu">list</span>(<span class="at">x=</span>xnew, <span class="at">z=</span>znew)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<p>Then predictions can be obtained with function <code>predict</code>, using <code>newdata</code> to indicate for what values of <span class="math inline">\((x,z)\)</span> we want to obtain the predictions (if not specified, predictions are produced for the values of <span class="math inline">\((x,z)\)</span> in the observed data given as input to <code>localnulltest</code>).</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>ypred<span class="ot">=</span> <span class="fu">predict</span>(fit0, <span class="at">newdata=</span>newdata)</span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>df<span class="ot">=</span> <span class="fu">tibble</span>(<span class="at">x1=</span><span class="fu">factor</span>(xnew[,<span class="dv">1</span>]), <span class="at">x2=</span>xnew[,<span class="dv">2</span>], <span class="at">z=</span>znew, <span class="at">ypred=</span>ypred, <span class="at">truemean=</span><span class="fu">truemean</span>(xnew,znew))</span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(df) <span class="sc">+</span></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_line</span>(<span class="fu">aes</span>(z, ypred, <span class="at">color=</span>x1)) <span class="sc">+</span></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_line</span>(<span class="fu">aes</span>(z, truemean, <span class="at">color=</span>x1), <span class="at">lty=</span><span class="dv">2</span>) <span class="sc">+</span></span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>    <span class="fu">labs</span>(<span class="at">y=</span><span class="st">"Predicted outcome"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="example_files/figure-html/unnamed-chunk-10-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+</section>
+<section id="multi-resolution-analysis" class="level2">
+<h2 class="anchored" data-anchor-id="multi-resolution-analysis">Multi-resolution analysis</h2>
+<p>We now consider a multi-resolution analysis where, rather than fixing the number of knots defining the local tests to be 10, we consider multiple values and use Bayesian model selection to average across the resolutions. Specifically we consider 5, 10 and 15 knots, and set <code>mc.cores=3</code> so that the analysis for each resolution is run in parallel (if package <code>parallel</code> does not run on your machine, you may set <code>mc.cores=1</code>). The output <code>pp_localknots</code> below indicates the posterior probability of each resolution level, which overwhelmingly favor 5 knots in our example.</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>fit<span class="ot">=</span> <span class="fu">localnulltest</span>(<span class="at">y=</span>y, <span class="at">x=</span>x, <span class="at">z=</span>z, <span class="at">nlocalknots=</span><span class="fu">c</span>(<span class="dv">5</span>,<span class="dv">10</span>,<span class="dv">15</span>), <span class="at">mc.cores=</span><span class="dv">3</span>)</span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>fit<span class="sc">$</span>pp_localknots</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] 9.999025e-01 9.748302e-05 9.359311e-09</code></pre>
+</div>
+</div>
+<p>As before, we may plot the posterior probabilities for local effects and their estimated values, as well as forecasts for the outcome. These are weighted averages across resolution levels, weighted by the posterior probability of each resolution level. Note that the step-wise behavior is more marked now than before when we used 10 local knots. This causes the posterior local test probabilities <span class="math inline">\(P(\beta_j(z) \neq 0)\)</span> to be more stable across <span class="math inline">\(z\)</span>, at the cost of the estimated local effects <span class="math inline">\(E(\beta_j(z) \mid y)\)</span> being coarser. Since our main goal is to test local null hypotheses, this seems a reasonable trade-off in our example. The forecasted outcome continues to be a similarly accurate approximation to the data-generating truth as in the single-resolution analysis.</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>b<span class="ot">=</span> <span class="fu">coef</span>(fit)</span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>sel<span class="ot">=</span> (b[,<span class="st">'covariate'</span>]<span class="sc">==</span><span class="dv">1</span>)</span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(b[sel,<span class="st">'z1'</span>], b[sel,<span class="st">'margpp'</span>], <span class="at">type=</span><span class="st">'l'</span>, <span class="at">xlab=</span><span class="st">'z'</span>, <span class="at">ylab=</span><span class="st">'Posterior probability of a local effect'</span>, <span class="at">cex.lab=</span><span class="fl">1.3</span>)</span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a><span class="fu">lines</span>(b[<span class="sc">!</span>sel,<span class="st">'z1'</span>], b[<span class="sc">!</span>sel,<span class="st">'margpp'</span>], <span class="at">lty=</span><span class="dv">3</span>)</span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a><span class="fu">legend</span>(<span class="st">'topleft'</span>, <span class="fu">c</span>(<span class="st">'x1'</span>,<span class="st">'x2'</span>), <span class="at">lty=</span><span class="fu">c</span>(<span class="dv">1</span>,<span class="dv">3</span>), <span class="at">cex=</span><span class="fl">1.5</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="example_files/figure-html/unnamed-chunk-12-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>zseq<span class="ot">=</span> <span class="fu">seq</span>(<span class="sc">-</span><span class="dv">3</span>,<span class="dv">3</span>,<span class="at">length=</span><span class="dv">200</span>)</span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>sel<span class="ot">=</span> (b[,<span class="st">'covariate'</span>]<span class="sc">==</span><span class="dv">1</span>)</span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(b[sel,<span class="st">'z1'</span>], b[sel,<span class="st">'estimate'</span>], <span class="at">type=</span><span class="st">'l'</span>, <span class="at">xlab=</span><span class="st">'z'</span>, <span class="at">ylab=</span><span class="st">'Estimated local covariate effects'</span>, <span class="at">cex.lab=</span><span class="fl">1.4</span>, <span class="at">cex.axis=</span><span class="fl">1.4</span>)</span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>mdif<span class="ot">=</span> <span class="fu">truemean</span>(<span class="at">x=</span><span class="fu">matrix</span>(<span class="dv">1</span>,<span class="at">nrow=</span><span class="fu">length</span>(zseq)),<span class="at">z=</span>zseq) <span class="sc">-</span> <span class="fu">truemean</span>(<span class="at">x=</span><span class="fu">matrix</span>(<span class="dv">0</span>,<span class="at">nrow=</span><span class="fu">length</span>(zseq)),<span class="at">z=</span>zseq)</span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a><span class="fu">lines</span>(zseq, mdif, <span class="at">col=</span><span class="st">'gray'</span>)</span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a><span class="fu">lines</span>(b[<span class="sc">!</span>sel,<span class="st">'z1'</span>], b[<span class="sc">!</span>sel,<span class="st">'estimate'</span>], <span class="at">lty=</span><span class="dv">3</span>)</span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a><span class="fu">legend</span>(<span class="st">'topleft'</span>, <span class="fu">c</span>(<span class="st">'Estimate for x1'</span>,<span class="st">'Truth for x1'</span>,<span class="st">'Estimate for x2'</span>), <span class="at">lty=</span><span class="fu">c</span>(<span class="dv">1</span>,<span class="dv">1</span>,<span class="dv">3</span>), <span class="at">col=</span><span class="fu">c</span>(<span class="dv">1</span>,<span class="st">'gray'</span>,<span class="dv">1</span>), <span class="at">cex=</span><span class="fl">1.4</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="example_files/figure-html/unnamed-chunk-13-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>ypred<span class="ot">=</span> <span class="fu">predict</span>(fit, <span class="at">newdata=</span>newdata)</span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>df<span class="ot">=</span> <span class="fu">tibble</span>(<span class="at">x1=</span><span class="fu">factor</span>(xnew[,<span class="dv">1</span>]), <span class="at">x2=</span>xnew[,<span class="dv">2</span>], <span class="at">z=</span>znew, <span class="at">ypred=</span>ypred, <span class="at">truemean=</span><span class="fu">truemean</span>(xnew,znew))</span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(df) <span class="sc">+</span></span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_line</span>(<span class="fu">aes</span>(z, ypred, <span class="at">color=</span>x1)) <span class="sc">+</span></span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_line</span>(<span class="fu">aes</span>(z, truemean, <span class="at">color=</span>x1), <span class="at">lty=</span><span class="dv">2</span>) <span class="sc">+</span></span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>    <span class="fu">labs</span>(<span class="at">y=</span><span class="st">"Predicted outcome"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="example_files/figure-html/unnamed-chunk-14-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+window.document.addEventListener("DOMContentLoaded", function (event) {
+  const toggleBodyColorMode = (bsSheetEl) => {
+    const mode = bsSheetEl.getAttribute("data-mode");
+    const bodyEl = window.document.querySelector("body");
+    if (mode === "dark") {
+      bodyEl.classList.add("quarto-dark");
+      bodyEl.classList.remove("quarto-light");
+    } else {
+      bodyEl.classList.add("quarto-light");
+      bodyEl.classList.remove("quarto-dark");
+    }
+  }
+  const toggleBodyColorPrimary = () => {
+    const bsSheetEl = window.document.querySelector("link#quarto-bootstrap");
+    if (bsSheetEl) {
+      toggleBodyColorMode(bsSheetEl);
+    }
+  }
+  toggleBodyColorPrimary();  
+  const icon = "";
+  const anchorJS = new window.AnchorJS();
+  anchorJS.options = {
+    placement: 'right',
+    icon: icon
+  };
+  anchorJS.add('.anchored');
+  const clipboard = new window.ClipboardJS('.code-copy-button', {
+    target: function(trigger) {
+      return trigger.previousElementSibling;
+    }
+  });
+  clipboard.on('success', function(e) {
+    // button target
+    const button = e.trigger;
+    // don't keep focus
+    button.blur();
+    // flash "checked"
+    button.classList.add('code-copy-button-checked');
+    var currentTitle = button.getAttribute("title");
+    button.setAttribute("title", "Copied!");
+    let tooltip;
+    if (window.bootstrap) {
+      button.setAttribute("data-bs-toggle", "tooltip");
+      button.setAttribute("data-bs-placement", "left");
+      button.setAttribute("data-bs-title", "Copied!");
+      tooltip = new bootstrap.Tooltip(button, 
+        { trigger: "manual", 
+          customClass: "code-copy-button-tooltip",
+          offset: [0, -8]});
+      tooltip.show();    
+    }
+    setTimeout(function() {
+      if (tooltip) {
+        tooltip.hide();
+        button.removeAttribute("data-bs-title");
+        button.removeAttribute("data-bs-toggle");
+        button.removeAttribute("data-bs-placement");
+      }
+      button.setAttribute("title", currentTitle);
+      button.classList.remove('code-copy-button-checked');
+    }, 1000);
+    // clear code selection
+    e.clearSelection();
+  });
+  function tippyHover(el, contentFn) {
+    const config = {
+      allowHTML: true,
+      content: contentFn,
+      maxWidth: 500,
+      delay: 100,
+      arrow: false,
+      appendTo: function(el) {
+          return el.parentElement;
+      },
+      interactive: true,
+      interactiveBorder: 10,
+      theme: 'quarto',
+      placement: 'bottom-start'
+    };
+    window.tippy(el, config); 
+  }
+  const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+  for (var i=0; i<noterefs.length; i++) {
+    const ref = noterefs[i];
+    tippyHover(ref, function() {
+      // use id or data attribute instead here
+      let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+      try { href = new URL(href).hash; } catch {}
+      const id = href.replace(/^#\/?/, "");
+      const note = window.document.getElementById(id);
+      return note.innerHTML;
+    });
+  }
+  const findCites = (el) => {
+    const parentEl = el.parentElement;
+    if (parentEl) {
+      const cites = parentEl.dataset.cites;
+      if (cites) {
+        return {
+          el,
+          cites: cites.split(' ')
+        };
+      } else {
+        return findCites(el.parentElement)
+      }
+    } else {
+      return undefined;
+    }
+  };
+  var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+  for (var i=0; i<bibliorefs.length; i++) {
+    const ref = bibliorefs[i];
+    const citeInfo = findCites(ref);
+    if (citeInfo) {
+      tippyHover(citeInfo.el, function() {
+        var popup = window.document.createElement('div');
+        citeInfo.cites.forEach(function(cite) {
+          var citeDiv = window.document.createElement('div');
+          citeDiv.classList.add('hanging-indent');
+          citeDiv.classList.add('csl-entry');
+          var biblioDiv = window.document.getElementById('ref-' + cite);
+          if (biblioDiv) {
+            citeDiv.innerHTML = biblioDiv.innerHTML;
+          }
+          popup.appendChild(citeDiv);
+        });
+        return popup.innerHTML;
+      });
+    }
+  }
+});
+</script>
+</div> <!-- /content -->
+
+
+
+</body></html>
