@@ -53,7 +53,7 @@ sim_parameters <- function(theta.min, theta.max, p, w, rho) {
 }
 
 
-simBMA <- function(simid, p, n, eBayes, priorCoef, priorDelta, theta.min, theta.max, rho, phi=1, niter=5000, niter.mstep=1000, ...) {
+simBMA <- function(simid, p, n, eBayes, priorCoef, priorModel, theta.min, theta.max, rho, phi=1, niter=5000, niter.mstep=1000, ...) {
   #Simulate data, run Bayesian model selection and averaging
   #
   # Simulate y ~ N(X theta, phi I), where X[i,] ~ N(0, S) with S[i,i]=1 and S[i,j]= rho
@@ -71,9 +71,9 @@ simBMA <- function(simid, p, n, eBayes, priorCoef, priorDelta, theta.min, theta.
   # - simid: simulation id, used to set random number generator
   # - p: number of covariates
   # - n: sample size of the sample to be simulated
-  # - eBayes: if 'all' modelSelection_eBayes is called using all columns in Z, if 'intercept' only Z[,1] is used, if 'none' modelSelection is called (so Z is not used). If 'none' then priorDelta must be specified
+  # - eBayes: if 'all' modelSelection_eBayes is called using all columns in Z, if 'intercept' only Z[,1] is used, if 'none' modelSelection is called (so Z is not used). If 'none' then priorModel must be specified
   # - priorCoef: prior on the regression coefficients
-  # - priorDelta: prior on the model space. Ignored unless eBayes == 'none'
+  # - priorModel: prior on the model space. Ignored unless eBayes == 'none'
   # - rho: covariates are draw from a multivariate Normal centered at 0, unit variances and all pairwise correlations equal to rho
   # - phi: true residual variance
   # - niter: number of MCMC iterations, passed onto modelSelection & modelSelection_eBayes
@@ -87,7 +87,7 @@ simBMA <- function(simid, p, n, eBayes, priorCoef, priorDelta, theta.min, theta.
   # - hyperpar: if eBayes == TRUE, hyperpar contains the estimated hyper-parameters
   require(mvtnorm)
   set.seed(simid)
-  if (missing(priorDelta)) priorDelta <- modelbbprior(1,1)
+  if (missing(priorModel)) priorModel <- modelbbprior(1,1)
   simpar <- sim_parameters(theta.min=theta.min, theta.max=theta.max, p=p, w=w, rho=rho)
   sim <- sim_data(theta=simpar$theta, n=n, rho=rho, phi=phi)
   y <- sim$y; x <- sim$x
@@ -100,7 +100,7 @@ simBMA <- function(simid, p, n, eBayes, priorCoef, priorDelta, theta.min, theta.
     ms <- modelSelection_eBayes(y=y, x=x, Z=simpar$Z[,1,drop=FALSE], niter.mcmc=niter, niter.mstep=niter.mstep, verbose=FALSE, ...)
     hyperpar <- ms$eBayes_hyperpar
   } else if (eBayes == 'none') {
-    ms <- modelSelection(y=y, x=x, niter=niter, priorCoef=priorCoef, priorDelta=priorDelta, verbose=FALSE, ...)
+    ms <- modelSelection(y=y, x=x, niter=niter, priorCoef=priorCoef, priorModel=priorModel, verbose=FALSE, ...)
     hyperpar <- NULL
   } else {
     stop("Invalid vale of eBayes. It should be 'all', 'intercept' or 'none'")
@@ -233,13 +233,13 @@ summarizeSim <- function(sim, threshold) {
 # - x: covariates, as passed onto modelSelection & modelSelection_eBayes
 # - Z: meta-covariates, as passed onto modelSelection_eBayes
 # - priorCoef: prior on the coefficients, as passed onto modelSelection & modelSelection_eBayes
-# - priorDelta: only used if eBayes==FALSE. prior on the models, as passed onto modelSelection & modelSelection_eBayes
+# - priorModel: only used if eBayes==FALSE. prior on the models, as passed onto modelSelection & modelSelection_eBayes
 # - eBayes: if TRUE modelSelection_eBayes is called, else modelSelection is called
 # - K: number of folds (set K=length(y) for leave-one-out cross-validation)
 # - seed: optionally, you may specify the random number generator seed
 # - niter: number of MCMC iterations, passed onto modelSelection & modelSelection_eBayes
 # - niter.mstep: number of MCMC iterations in each M-step of the empirical Bayes algorithm
-kfoldCV.bma <- function(y, x, Z, priorCoef=momprior(), priorDelta=modelbbprior(), eBayes,  K=10, seed, niter=5000, niter.mstep=1000, mc.cores=1, verbose=TRUE) {
+kfoldCV.bma <- function(y, x, Z, priorCoef=momprior(), priorModel=modelbbprior(), eBayes,  K=10, seed, niter=5000, niter.mstep=1000, mc.cores=1, verbose=TRUE) {
   ## K-fold cross-validation for BMA predictions
   if (K > nrow(x)) stop("The number of folds cannot be larger than nrow(x)")
   if (!missing(seed)) set.seed(seed)
@@ -251,7 +251,7 @@ kfoldCV.bma <- function(y, x, Z, priorCoef=momprior(), priorDelta=modelbbprior()
       ms <- modelSelection_eBayes(y=y[!sel], x=x[!sel,,drop=FALSE], Z=Z, niter.mcmc=niter, niter.mstep=niter.mstep, verbose=FALSE, ...)
       hyperpar <- ms$eBayes_hyperpar
     } else {
-      ms <- modelSelection(y=y[!sel], x=x[!sel,,drop=FALSE], niter=niter, priorCoef=priorCoef, priorDelta=priorDelta, verbose=FALSE, ...)
+      ms <- modelSelection(y=y[!sel], x=x[!sel,,drop=FALSE], niter=niter, priorCoef=priorCoef, priorModel=priorModel, verbose=FALSE, ...)
       hyperpar <- NULL
     }
     pred <- predict(ms, newdata= x[sel,,drop=FALSE])[,'mean']

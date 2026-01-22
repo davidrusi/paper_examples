@@ -1,10 +1,10 @@
 #devtools::install_github("https://github.com/davidrusi/mombf")
 library(tidyverse)
-library(mombf)
+library(modelSelection)
 library(hgu133plus2.db)
 library(xtable)
 source("routines.R")
-priorCoef= pmomprior()
+priorCoef= momprior()
 #priorCoef= zellnerprior()  #uncomment this line for Zellner prior results
 
 # Import data
@@ -18,15 +18,15 @@ Z= matrix(inshort, ncol=1)
 
 # Bayesian variable selection with eBayes and Beta-Binomial prior
 
-ms.eb= modelSelection_eBayes(y=y, x=x, Z=Z, priorCoef=priorCoef, niter.mcmc= 5000, niter.mstep= 1000)
-ms.bb= modelSelection(y=y, x=x, niter= 5000, priorCoef=priorCoef, priorDelta= modelbbprior())
+system.time(ms.eb <- modelSelection_eBayes(y=y, x=x, Z=Z, priorCoef=priorCoef, niter.mcmc= 5000, niter.mstep= 1000))
+system.time(ms.bb <- modelSelection(y=y, x=x, niter= 5000, priorCoef=priorCoef, priorModel= modelbbprior()))
 b.eb= coef(ms.eb) #Get BMA estimates and PIP
 b.bb= coef(ms.bb) #Get BMA estimates and PIP
 
 # Leave-one-out cross-validation
 
 msloo.eb= kfoldCV.bma(y=y, x=x, Z=Z, eBayes=TRUE,  priorCoef=priorCoef, K=length(y), verbose=TRUE, niter=5000, niter.mstep=1000)
-msloo.bb= kfoldCV.bma(y=y, x=x, eBayes=FALSE, priorCoef=priorCoef, priorDelta=modelbbprior(), K=length(y), verbose=TRUE)
+msloo.bb= kfoldCV.bma(y=y, x=x, eBayes=FALSE, priorCoef=priorCoef, priorModel=modelbbprior(), K=length(y), verbose=TRUE)
 
 
 # Report results
