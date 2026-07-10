@@ -1,6 +1,8 @@
 # paper_examples
 This repository contains code to reproduce examples in research papers authored by David Rossell. Currently there is code for the following papers
 
+Carter JS, Rossell D. Positive-definiteness in separable priors. 2026
+
 Sulem D, Jewson J, Rossell D. Bayesian computation for high-dimensional Gaussian graphical models with spike-and-slab priors (2025)
 
 Rognon-Vael P, Rossell D. Empirical Bayes for Data Integration (2025). arxiv 2508.08336 

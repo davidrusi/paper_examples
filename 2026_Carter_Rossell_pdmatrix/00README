@@ -1,0 +1,6 @@
+This directory contains the scripts to reproduce the examples shown in the paper by Jack Carter and David Rossell about Positive-definiteness in separable priors.
+
+- truncation_effect_prior.Rmd. Example showing the effect of the positive-definiteness truncation on the prior distribution of a sparse random symmetric matrix.
+
+- simulation_priorsettings.Rmd. Simulation study showing the effects on posterior inference of using several settings for the prior distribution of a sparse random symmetric matrix.
+
