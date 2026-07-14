@@ -16,13 +16,13 @@ save2pdf <- FALSE  # set to true to write plots to pdf
 
 # Set simulation parameters
 
-We consider two problem dimensions $k \in \{5, 50\}$ and four prior edge inclusion probabilities $\eta \in \{ 0.05, 0.1, 0.2, 0.4 \}$.
+We consider two problem dimensions $k \in \{5, 50\}$ and four prior edge inclusion probabilities $P(Z_{ij}=1)= \eta \in \{ 0.05, 0.1, 0.2, 0.4 \}$. We also consider a Beta-Binomial(1,2) prior where $\eta \sim \mbox{Beta}(1,2)$ is random (with expectation $E(\eta)=1/3$), which implies a Beta-Binomial(1,2) distribution on the model size $\sum_{i<j} Z_{ij}$.
 Non-zero off-diagonal entries are simulated $\Theta_{ij} \mid Z_{ij}=1 \sim N(0, \sigma^2)$ where $\sigma^2=1$, and $Z_{ij}= \mbox{I}(\Theta_{ij} \neq 0)$ is an edge inclusion indicator for $i > j$.
 Diagonal entries are generated $\Theta_{ii} \sim \mbox{Exp}(\lambda / 2)$, where $\lambda / 2$ is the rate parameter and hence $2/\lambda$ the mean. As a first possible choice we consider $\lambda = 1$.
 
 ```{r}
 kseq <- c(5, 50)
-edge_prob_seq <- c(0.05, 0.1, 0.2, 0.4)
+edge_prob_seq <- c(0.05, 0.1, 0.2, 0.4, -1)  # -1 signals Beta-Binomial(1,1) prior
 lambda1 <- 1
 ```
 
@@ -30,7 +30,7 @@ As a second possible choice for $\lambda$, we set $\lambda$ such that $P(\Theta_
 $$
 \frac{2}{\lambda} > \frac{2 \sigma p \sqrt{\bar d}}{\alpha} \sqrt{- W_{-1}\left( \frac{-\alpha^2}{32 e^2 p^2} \right)},
 $$
-where $W_{-1}$ is the branch of Lambert's $W_q$ function associated to $q=-1$, and $\bar d$ is an upper-bound on the maximum edge degree. Below we show results for $\bar d =1$, which results in a somewhat liberal upper bound, but virtually identical results are obtained by setting $\bar d = p$. Note that this rule gives a value of $\lambda$ that depends on $p$, here for simplicity we take the $\lambda$ value associated to the larger $k=100$, since this also suffices for any $p \leq 100$ (and the results remain virtually identical when using a different $\lambda$ for $k=5$).
+where $W_{-1}$ is the branch of Lambert's $W_q$ function associated to $q=-1$, and setting $\bar d= p$ as an upper-bound on the maximum edge degree. Note that this rule gives a value of $\lambda$ that depends on $p$, here for simplicity we take the $\lambda$ value associated to the larger $k=100$, since this also suffices for any $p \leq 100$ (and the results remain virtually identical when using a different $\lambda$ for $k=5$).
 
 ```{r}
 sd.slab <- 1
@@ -38,12 +38,11 @@ alpha <- 0.1
 p <- max(kseq)
 x <- - alpha^2 /(32 * exp(2) * p^2)
 l <- lambertWm1(x) # q = -1 branch of Lambert's W_q function
-mu <- (2 * sd.slab * p / alpha) * sqrt(-l)  # liberal upper bound
+mu <- (2 * sd.slab * p^(3/2) / alpha) * sqrt(-l) # conservative upper-bound
+#mu <- (2 * sd.slab * p / alpha) * sqrt(-l)  # liberal upper bound (same results, except for Beta-Binomial)
 lambda2 <- 2/mu
-#mu <- (2 * sd.slab * p^(3/2) / alpha) * sqrt(-l) # conservative upper-bound (same results)
 lambda2
 ```
-
 
 # Simulate from prior
 
@@ -54,17 +53,58 @@ for (i in 1:length(kseq)) {
   p <- kseq[i]
   y <- matrix(nrow=0, ncol=p)
   for (j in 1:length(edge_prob_seq)) {
-    priorModel <- modelbinomprior(edge_prob_seq[j])
+    if (edge_prob_seq[j] >= 0) {
+      priorModel <- modelbinomprior(edge_prob_seq[j])
+      niter <- 5000
+    } else {
+      priorModel <- modelbbprior(1,2)
+      niter <- 50000
+    }
 
-    fit1[[i]][[j]] <- modelSelectionGGM(y, niter=5000, burnin=0, priorCoef=priorCoef, priorModel=priorModel, 
+    fit1[[i]][[j]] <- modelSelectionGGM(y, niter=niter, burnin=0, priorCoef=priorCoef, priorModel=priorModel, 
                                         priorDiag= exponentialprior(lambda1), verbose=FALSE)
-    fit2[[i]][[j]] <- modelSelectionGGM(y, niter=5000, burnin=0, priorCoef=priorCoef, priorModel=priorModel, 
+    fit2[[i]][[j]] <- modelSelectionGGM(y, niter=niter, burnin=0, priorCoef=priorCoef, priorModel=priorModel, 
                                         priorDiag= exponentialprior(lambda2), verbose=FALSE)
     cat('.')
   }
   cat('\n')
 }
 ```
+
+# Inspect model prior under the Beta-Binomial
+
+Inspect the beta-binomial output for $k=50$ and $\lambda=1$: the implied prior on the model size is extremely sparse, relative to the untruncated uniform implied by the beta-binomial.
+
+```{r}
+i <- 2
+bbfit <- fit1[[i]][[length(edge_prob_seq)]]
+nedges <- kseq[i] * (kseq[i]-1) / 2
+xlim <- c(0,nedges)
+burnin <- 2500
+active_edges <- rowSums(as.matrix(bbfit$postSample[-1:-burnin,] != 0)) - kseq[i]
+hist(active_edges, prob=TRUE, xlab='Number of edges', main='', ylab='Prior probability', xlim=xlim)
+```
+
+We produce the same plot for $k=50$ and smaller $\lambda$.
+
+```{r}
+i <- 2
+bbfit <- fit2[[i]][[length(edge_prob_seq)]]
+nedges <- kseq[i] * (kseq[i]-1) / 2
+xlim <- c(0,nedges)
+burnin <- 2500
+active_edges <- rowSums(as.matrix(bbfit$postSample != 0)) - kseq[i]
+plot(active_edges, type='l')
+```
+
+
+```{r}
+library(extraDistr)
+hist(active_edges, prob=TRUE, xlab='Number of edges', breaks=10, main='', ylab='Prior probability', xlim=xlim)
+pmf_bbin <- dbbinom(0:nedges, size=nedges, alpha=1, beta=2)
+lines(0:nedges, pmf_bbin, type='l')
+```
+
 
 Assess MCMC convergence. A burnin of 1,000 is enough
 
@@ -116,8 +156,6 @@ for (i in 1:length(kseq)) {
 }
 ```
 
-# Extract results
-
 For each $p$ and edge probability, we calculate the prior edge probability after truncation, standard deviation of non-zero off-diagonal entries, and mean diagonal entry.
 
 ```{r}
@@ -125,6 +163,7 @@ pars <- expand.grid(k=factor(kseq), edge_prob=edge_prob_seq)
 
 edge_prob_trunc <- sd_offdiag <- mean_diag <- matrix(NA, nrow=nrow(pars), ncol=2)
 colnames(edge_prob_trunc) <- paste("lambda=",round(c(lambda1,lambda2),5))
+colnames(sd_offdiag) <- colnames(mean_diag) <- colnames(edge_prob_trunc)
 sd_nonzero <- function(x) sd(x[x != 0])
 for (i in 1:nrow(pars)) {
   k <- pars$k[i]
@@ -153,49 +192,63 @@ edge_prob_trunc <- cbind(pars, edge_prob_trunc) |>
 sd_offdiag <- cbind(pars, sd_offdiag) |>
   pivot_longer(cols=3:4, names_to="lambda") |>
   mutate(value = round(value, 3)) |>
-  rename(sd_offdiag = value)
+  rename(sd_offdiag = value) |>
+  mutate(lambda = factor(lambda)) |>
+  mutate(lambda = factor(lambda, levels=rev(levels(lambda))))
 
 mean_diag <- cbind(pars, mean_diag) |>
   pivot_longer(cols=3:4, names_to="lambda") |>
   mutate(value = round(value, 3)) |>
-  rename(mean_diag = value)
-
+  rename(mean_diag = value) |>
+  mutate(lambda = factor(lambda)) |>
+  mutate(lambda = factor(lambda, levels=rev(levels(lambda))))
 ```
 
-We also obtain the prior distribution of the number of edges, before and after truncation (the former is given by a Binomial distribution, the latter is estimated from the MCMC output).
+We also obtain the prior distribution of the number of edges $\sum_{i<j} Z_{ij}$, before and after truncation. The latter is estimated from MCMC output. For $Z_{ij} \sim \mbox{Bern}(\eta)$, the former is given by a Binomial distribution with $p(p-1)/2$ trials and success probability $\eta$.
 
 ```{r}
-nedges1 <- lapply(total_edges1, function(z) data.frame(do.call(cbind, z))) |>
+nedges1 <- lapply(total_edges1, function(z) data.frame(do.call(cbind, z), check.names = FALSE)) |>
   lapply(pivot_longer, cols=1:length(edge_prob_seq), names_to="edge_prob")
+
 nedges1 <- do.call(cbind, nedges1) |>
   select(-3)
+
 names(nedges1) <- sub(".value","",names(nedges1))
 names(nedges1)[1] <- "edge_prob"
-nedges1 <- mutate(nedges1, edge_prob = sub("edge_prob...","",edge_prob)) |>
+
+nedges1 <- mutate(nedges1, edge_prob = sub("edge_prob = ", "", edge_prob, fixed = TRUE)) |>
   pivot_longer(cols=2:3, names_to= "k") |>
   mutate(k = sub("k = ","", k)) |>
   rename(number_edges = value)
 
-nedges2 <- lapply(total_edges2, function(z) data.frame(do.call(cbind, z))) |>
+
+nedges2 <- lapply(total_edges2, function(z) data.frame(do.call(cbind, z), check.names = FALSE)) |>
   lapply(pivot_longer, cols=1:length(edge_prob_seq), names_to="edge_prob")
+
 nedges2 <- do.call(cbind, nedges2) |>
   select(-3)
+
 names(nedges2) <- sub(".value","",names(nedges2))
 names(nedges2)[1] <- "edge_prob"
-nedges2 <- mutate(nedges2, edge_prob = sub("edge_prob...","",edge_prob)) |>
+
+nedges2 <- mutate(nedges2, edge_prob = sub("edge_prob = ", "", edge_prob, fixed = TRUE)) |>
   pivot_longer(cols=2:3, names_to= "k") |>
   mutate(k = sub("k = ","", k)) |>
   rename(number_edges = value)
 ```
 
-We only evaluate the Binomial prior for $k=100$, since we will later restrict the plot to this case.
+We only evaluate the Binomial and Beta-Binomial priors for $k=100$, since we will later restrict the plot to this case.
 
 ```{r}
 totaledges <- max(kseq) * (max(kseq)-1) / 2
 nedges_binom <- vector("list", length(edge_prob_seq))
 for (j in 1:length(edge_prob_seq)) {
-  
-  pmf_edges <- dbinom(x=0:totaledges, size=totaledges, prob=edge_prob_seq[j])
+
+  if (edge_prob_seq[j] >= 0) {
+    pmf_edges <- dbinom(x=0:totaledges, size=totaledges, prob=edge_prob_seq[j])
+  } else {
+    pmf_edges <- dbbinom(0:totaledges, size=totaledges, alpha=1, beta=2)
+  }
   number_edges <- rep(0:totaledges, round(10000 * pmf_edges, 4))
   
   nedges_binom[[j]] <- data.frame(edge_prob=edge_prob_seq[j],
@@ -205,6 +258,7 @@ for (j in 1:length(edge_prob_seq)) {
 }
 nedges_binom <- do.call(rbind, nedges_binom)
 ```
+
 
 
 # Visualize results
@@ -225,15 +279,16 @@ mean_diag
 
 ## Edge probabilities
 
-We plot the edge inclusion probabilities before and after truncation.
+We plot the edge inclusion probabilities before and after truncation. For the Beta-Binomial(1,1), the marginal prior edge inclusion probability is 1/3.
 
 ```{r}
-ggplot(edge_prob_trunc, aes(x=edge_prob, y=edge_prob_trunc, col=k)) +
+mutate(edge_prob_trunc, edge_prob= ifelse(edge_prob >= 0, edge_prob, 1/3)) |>
+ggplot(aes(x=edge_prob, y=edge_prob_trunc, col=k)) +
   geom_line() +
   geom_abline(lty=2) +
   facet_wrap(~ lambda) +
   theme_bw(base_size = 15) +
-  theme(legend.position = c(0.9, 0.2)) +
+  theme(legend.position = c(0.1, 0.85)) +
   scale_color_grey() +
   xlab("Edge probability (before truncation)") +
   ylab("Edge probability (after truncation)")
@@ -252,16 +307,25 @@ data2plot <- filter(nedges1, k=="50") |>
 ```
 
 
+
+
+
 ```{r, warning=FALSE, message=FALSE}
-ggplot(data2plot, aes(x=number_edges, col=trunc)) +
+sel <- paste0("Edge probability = ", edge_prob_seq[c(1,length(edge_prob_seq))])
+filter(data2plot, edge_prob %in% sel) |>
+  transform(edge_prob = factor(ifelse(edge_prob == "Edge probability = -1", "Beta-Binomial(2,1)", edge_prob))) |>
+  transform(edge_prob = factor(edge_prob, levels=rev(levels(edge_prob)))) |>
+ggplot(aes(x=number_edges, col=trunc)) +
   geom_histogram(aes(y = after_stat(density)), fill=NA, position="identity") +
-  facet_wrap(~ edge_prob, scales="free_x") +
+  facet_wrap(~ edge_prob, scales="free") +
   theme_bw(base_size = 15) +
-  theme(legend.position = c(0.9, 0.3), legend.title = element_blank()) +
+  theme(legend.position = c(0.85, 0.85), legend.title = element_blank()) +
   scale_color_grey() +
   xlab("Number of edges") +
   ylab("Prior probability")
 ```
+
+
 
 
 We zoom into the plots for edge probabilities 0.05 and 0.2.
@@ -270,24 +334,24 @@ We zoom into the plots for edge probabilities 0.05 and 0.2.
 filter(data2plot, edge_prob == "Edge probability = 0.05") |>
 ggplot(aes(x=number_edges, col=trunc)) +
   geom_histogram(aes(y = after_stat(density)), fill=NA, position="identity") +
-  theme_bw(base_size = 15) +
-  theme(legend.position = c(0.85, 0.85), legend.title = element_blank()) +
+  theme_bw(base_size = 18) +
+  theme(legend.position = c(0.8, 0.85), legend.title = element_blank()) +
   scale_color_grey() +
   xlab("Number of edges") +
   ylab("Prior probability")
 
 if (save2pdf) ggsave("prior_number_edges_edgeprob05.pdf")
 
-filter(data2plot, edge_prob == "Edge probability = 0.2") |>
+filter(data2plot, edge_prob == "Edge probability = -1") |>
 ggplot(aes(x=number_edges, col=trunc)) +
   geom_histogram(aes(y = after_stat(density)), fill=NA, position="identity") +
-  theme_bw(base_size = 15) +
-  theme(legend.position = c(0.85, 0.85), legend.title = element_blank()) +
+  theme_bw(base_size = 18) +
+  theme(legend.position = c(0.8, 0.85), legend.title = element_blank()) +
   scale_color_grey() +
   xlab("Number of edges") +
   ylab("Prior probability")
 
-if (save2pdf) ggsave("prior_number_edges_edgeprob20.pdf")
+if (save2pdf) ggsave("prior_number_edges_edgeprob_bbin.pdf")
 
 ```
 
