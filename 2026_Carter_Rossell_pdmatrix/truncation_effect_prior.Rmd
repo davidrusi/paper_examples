@@ -10,6 +10,7 @@ output:
 library(modelSelection)
 library(tidyverse)
 library(lamW)      # Lambert's W_q function
+library(extraDistr)# Beta-Binomial distribution
 set.seed(20260606) # for reproducibility
 save2pdf <- FALSE  # set to true to write plots to pdf
 ```
@@ -71,42 +72,8 @@ for (i in 1:length(kseq)) {
 }
 ```
 
-# Inspect model prior under the Beta-Binomial
 
-Inspect the beta-binomial output for $k=50$ and $\lambda=1$: the implied prior on the model size is extremely sparse, relative to the untruncated uniform implied by the beta-binomial.
-
-```{r}
-i <- 2
-bbfit <- fit1[[i]][[length(edge_prob_seq)]]
-nedges <- kseq[i] * (kseq[i]-1) / 2
-xlim <- c(0,nedges)
-burnin <- 2500
-active_edges <- rowSums(as.matrix(bbfit$postSample[-1:-burnin,] != 0)) - kseq[i]
-hist(active_edges, prob=TRUE, xlab='Number of edges', main='', ylab='Prior probability', xlim=xlim)
-```
-
-We produce the same plot for $k=50$ and smaller $\lambda$.
-
-```{r}
-i <- 2
-bbfit <- fit2[[i]][[length(edge_prob_seq)]]
-nedges <- kseq[i] * (kseq[i]-1) / 2
-xlim <- c(0,nedges)
-burnin <- 2500
-active_edges <- rowSums(as.matrix(bbfit$postSample != 0)) - kseq[i]
-plot(active_edges, type='l')
-```
-
-
-```{r}
-library(extraDistr)
-hist(active_edges, prob=TRUE, xlab='Number of edges', breaks=10, main='', ylab='Prior probability', xlim=xlim)
-pmf_bbin <- dbbinom(0:nedges, size=nedges, alpha=1, beta=2)
-lines(0:nedges, pmf_bbin, type='l')
-```
-
-
-Assess MCMC convergence. A burnin of 1,000 is enough
+Assess MCMC convergence. 
 
 ```{r}
 par(mar= c(5,5,0.1,0.1), mfrow=c(2,1))
