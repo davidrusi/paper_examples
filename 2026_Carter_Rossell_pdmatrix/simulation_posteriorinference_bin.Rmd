@@ -1,0 +1,676 @@
+---
+title: "GGM Simulation. Effect of prior slab variance"
+output: 
+  html_document:
+    toc: true
+    theme: united
+---
+
+
+```{r, warning=FALSE, message=FALSE}
+library(modelSelection)
+library(mvtnorm)
+library(tidyverse)
+library(lamW)      # Lambert's W_q function
+set.seed(20260710) # for reproducibility
+save2pdf <- TRUE
+nsims <- 20 # number of simulations
+nseq <- c(100, 500)    # sample size
+```
+
+# Set default prior parameters
+
+We consider a discrete spike-and-slab prior on the precision matrix, with prior slab (edge inclusion) probability $\eta=0.1$. 
+The prior on diagonal elements is $\theta_{ii} \sim \mbox{Exp}(\lambda/2)$, with expectation $\mu= 2/\lambda$, and the prior on off-diagonal elements is $\theta_{ij} \sim N(0, \sigma^2)$. A natural default is $\sigma^2 =1$. If all the columns in the observed dataset are standardized to zero sample mean and unit sample variance, this default is related to Zellner's unit information prior in regression.
+We consider three settings:
+
+1. A default $\lambda=1$, and $\sigma^2=1$.
+
+2. A default $\lambda=1$, with $\sigma^2$ specified such that $P(\Theta \succ 0) = 0.95$. This guarantees that the total variation distance between the priors before and after positive-definiteness truncation is small, and hence that the prior is interpretable.
+
+3. Set $\lambda$ such that $P(\Theta_{ii} \succ 0 \mid Z) \geq 1 - \alpha$ for every edge configuration $Z$ and taking $\alpha=0.1$, and $\sigma^2=1$.
+
+
+```{r}
+edge_prob= 0.1 # probability of non-zero entry
+mu = 9.5       # mean of off-diagonal 
+lambda= 2/mu
+pexp(1, rate=lambda/2, lower.tail=FALSE) #equals 0.9
+```
+
+We next obtain the value of $\lambda$ for Setting 3.
+
+```{r}
+sd.slab <- 1
+alpha <- 0.1
+kseq <- c(50, 100)
+names(kseq) <- paste('k=', kseq, sep='')
+x <- - alpha^2 /(32 * exp(2) * kseq^2)
+l <- lambertWm1(x) # q = -1 branch of Lambert's W_q function
+mu <- (2 * sd.slab * kseq / alpha) * sqrt(-l)  # liberal upper bound
+#mu <- (2 * sd.slab * kseq^(3/2) / alpha) * sqrt(-l) # conservative upper-bound (same results)
+lambda2 <- 2/mu
+names(lambda2) <- names(kseq)
+lambda2
+```
+
+Finally, for setting 2, given the prior edge inclusion probability $\eta$ and $\lambda$, function `randompdmatrix_setpars` finds the value of $\sigma^2$ such that $P(\Theta \succ 0)=0.95$. This is done via Monte Carlo, that is sampling from the prior and finding $\sigma$ such that $P(\Theta \succ 0) = 0.95$.
+
+```{r}
+var.slab.setting2 <- double(length(kseq))
+names(var.slab.setting2) <- paste('k=', kseq, sep='')
+for (i in 1:length(kseq)) {
+  var.slab.setting2[i] <- modelSelection:::randompdmatrix_setpars(p=kseq[i], edge_prob=edge_prob, diag_distrib='Exp', diag_mean=2, method='MC')$offdiag_variance
+}
+```
+
+We store the prior parameter values obtained for each setting and $k = \mbox{dim}(\Theta)$.
+
+```{r}
+priorpars <- expand.grid(setting=c('Setting 1', 'Setting 2', 'Setting 3'), k=kseq)
+priorpars$edge_prob <- edge_prob
+priorpars$lambda <- priorpars$var.slab <- NA
+for (i in 1:nrow(priorpars)) {
+  if (priorpars$setting[i] == 'Setting 1') {
+    priorpars$lambda[i] <- 1
+    priorpars$var.slab[i] <- 1
+  } else if (priorpars$setting[i] == 'Setting 2') {
+    priorpars$lambda[i] <- 1
+    priorpars$var.slab[i] <- var.slab.setting2[paste('k=', priorpars$k[i], sep='')]
+  } else if (priorpars$setting[i] == 'Setting 3') {
+    priorpars$lambda[i] <- lambda2[paste('k=', priorpars$k[i], sep='')]
+    priorpars$var.slab[i] <- 1
+  }
+}
+priorpars
+```
+
+
+
+# Function to run simulations
+
+We create a function that simulates data from a multivariate Gaussian, fits a Bayesian Gaussian graphical model model under a discrete spike-and-slab prior, and record the mean squared estimation error, the average estimate of each $\theta_{ij}$ entry, and the average posterior probability $P(\theta_{ij} \neq 0 \mid y)$.
+
+
+```{r}
+run_simulations <- function(n, nsims, Theta, Sigma=solve(Theta), priorCoef, priorDiag, priorModel, scale=TRUE) {
+  ans = vector("list", nsims)
+  for (i in 1:nsims) {
+    set.seed(i)  #for reproducibility
+
+    ansi = vector("list", length(n))
+    for (j in 1:length(n)) {
+    
+      # Simulate data
+      samplesize <- n[j]
+      y = rmvnorm(samplesize, sigma= Sigma)
+      sy = apply(y, 2, 'sd')
+
+      # Fit models   
+      fit = modelSelectionGGM(y=y, priorCoef=priorCoef, priorDiag=priorDiag, priorModel=priorModel, center=scale, scale=scale, verbose=FALSE)
+
+      # Extract BMA parameter estimates and posterior edge inclusion probabilities
+      b= data.frame(coef(fit)) |>
+        select(row, column, estimate, margpp)
+
+      # Convert to original scale
+      scaling = 1 / (sy[b$row] * sy[b$column])
+      b = transform(b, estimate= estimate * scaling)
+
+      # Add data-generating truth
+      if (i==1) {
+        truth = double(nrow(b))
+        for (l in 1:nrow(b)) truth[l] = Theta[b$row[l], b$column[l]]
+      }
+      b$truth = truth
+  
+      # Record MSE, average posterior inclusion probability and average point estimate
+      ansi[[j]] = group_by(b, truth) |>
+                 summarize(mse = mean((truth - estimate)^2), pp = mean(margpp), mean_estimate = mean(estimate), count = n()) |>
+                 cbind(simid = i, n = samplesize)
+
+      cat('.')
+
+    }
+    
+    ans[[i]] <- do.call(rbind, ansi)
+  }
+  return(ans)
+}
+```
+
+
+# Banded diagonal
+
+## Run simulations
+
+
+```{r}
+sims1 <- sims2 <- sims3 <- vector("list", length(kseq))
+names(sims1) <- names(sims2) <- names(sims3) <- names(kseq)
+diagvals <- vector("list", length(kseq))
+for (i in 1:length(kseq)) {
+  ksel <- kseq[i]  # number of variables
+  cat("Simulations for k =", ksel)
+  
+  # Data-generating precision matrix
+  Theta= diag(ksel)
+  Theta[abs(col(Theta) - row(Theta)) == 1] <- 0.5
+  Theta[abs(col(Theta) - row(Theta)) == 2] <- 0.25
+  Sigma = solve(Theta)
+  diagvals[[i]] <- unique(diag(Theta))
+
+  # Set prior distribution under each setting
+  pars_sel <- filter(priorpars, setting == "Setting 1", k == ksel)
+  priorModel <- modelbinomprior(pars_sel$edge_prob)
+  priorDiag <- exponentialprior(lambda = pars_sel$lambda)
+  priorCoef <- normalidprior(pars_sel$var.slab)
+  sims1[[i]] <- run_simulations(n=nseq, nsims=nsims, Theta=Theta, Sigma=solve(Theta), priorCoef=priorCoef, priorDiag=priorDiag, priorModel=priorModel) 
+
+  pars_sel <- filter(priorpars, setting == "Setting 2", k == ksel)
+  priorModel <- modelbinomprior(pars_sel$edge_prob)
+  priorDiag <- exponentialprior(lambda = pars_sel$lambda)
+  priorCoef <- normalidprior(pars_sel$var.slab)
+  sims2[[i]] <- run_simulations(n=nseq, nsims=nsims, Theta=Theta, Sigma=solve(Theta), priorCoef=priorCoef, priorDiag=priorDiag, priorModel=priorModel) 
+
+  pars_sel <- filter(priorpars, setting == "Setting 3", k == ksel)
+  priorModel <- modelbinomprior(pars_sel$edge_prob)
+  priorDiag <- exponentialprior(lambda = pars_sel$lambda)
+  priorCoef <- normalidprior(pars_sel$var.slab)
+  sims3[[i]] <- run_simulations(n=nseq, nsims=nsims, Theta=Theta, Sigma=solve(Theta), priorCoef=priorCoef, priorDiag=priorDiag, priorModel=priorModel) 
+
+  cat("\n")
+}
+diagvals <- unique(unlist(diagvals))
+```
+
+
+We summarize the results across all simulations. For each prior parameter setting and $k= \mbox{dim}(\Theta)$, and each value of the data-generating $\Theta_{ij}$, we report the mean squared estimation error in the Bayesian model averaging estimate $E(\Theta_{ij} \mid y)$, the average marginal posterior edge inclusion probability $P(\Theta_{ij} \neq 0 \mid y)$, and the average BMA estimate.
+
+```{r}
+summarize_simulations <- function(kseq, sims1, sims2, sims3) {
+  
+  sim_summary <- vector("list", length(kseq))
+  names(sim_summary) <- names(kseq)
+
+  for (i in 1:length(kseq)) {
+
+    summary1 = do.call(rbind, sims1[[i]]) |>
+      data.frame() |>
+      group_by(n, truth) |>
+      summarize(across(mse:count, mean), .groups="drop") |>
+      transform(k = kseq[i], Setting = "Setting 1")
+
+    summary2 = do.call(rbind, sims2[[i]]) |>
+      data.frame() |>
+      group_by(n, truth) |>
+      summarize(across(mse:count, mean), .groups="drop") |>
+      transform(k = kseq[i], Setting = "Setting 2")
+
+    summary3 = do.call(rbind, sims3[[i]]) |>
+      data.frame() |>
+      group_by(n, truth) |>
+      summarize(across(mse:count, mean), .groups="drop") |>
+      transform(k = kseq[i], Setting = "Setting 3")
+  
+    sim_summary[[i]] <- rbind(summary1, summary2, summary3)
+
+  }
+
+  sim_summary <- do.call(rbind, sim_summary) |>
+    transform(root_mse = round(sqrt(mse),3), pp = round(pp,3), mean_estimate = round(mean_estimate, 4)) |>
+    select(-mse) |>
+    select(Setting, k, root_mse, everything())
+
+  rownames(sim_summary) <- NULL
+
+  return(sim_summary)
+}
+
+```
+
+
+```{r, warning=FALSE}
+sim_summary <- summarize_simulations(kseq=kseq, sims1=sims1, sims2=sims2, sims3=sims3)
+sim_summary
+```
+
+
+## Plots
+
+We first display the root mean square error, and subsequently the average posterior inclusion probability.
+
+```{r}
+for (i in 1:length(kseq)) {
+  
+  myplot <- filter(sim_summary, !(truth %in% diagvals), k==kseq[i]) |>
+  ggplot(aes(x=truth, y=root_mse, col=Setting, lty=Setting, pch=Setting)) +
+    geom_line() +
+    geom_point() +
+    facet_wrap(~ n, labeller = labeller(n = function(x) paste0("n = ", x))) +
+    theme_bw(base_size = 15) +
+    theme(legend.position = c(0.1, 0.85), legend.title=element_blank()) +
+    scale_color_grey() +
+    xlab(expression("Data-generating " * Theta[ij])) +
+    ylab("Root mean squared error")
+  print(myplot)
+
+  fname <- paste0("sim_priorsettings_banded_rootmse_nodiag_k", kseq[i], ".pdf")
+  if (save2pdf) ggsave(fname, plot = myplot)
+}
+```
+
+```{r}
+for (i in 1:length(kseq)) {
+  
+  myplot <- filter(sim_summary, k==kseq[i]) |>
+  ggplot(aes(x=truth, y=root_mse, col=Setting, lty=Setting, pch=Setting)) +
+    geom_line() +
+    geom_point() +
+    facet_wrap(~ n, labeller = labeller(n = function(x) paste0("n = ", x))) +
+    theme_bw(base_size = 15) +
+    theme(legend.position = c(0.1, 0.85), legend.title=element_blank()) +
+    scale_color_grey() +
+    xlab(expression("Data-generating " * Theta[ij])) +
+    ylab("Root mean squared error")
+  print(myplot)
+
+  fname <- paste0("sim_priorsettings_banded_rootmse_k", kseq[i], ".pdf")
+  if (save2pdf) ggsave(fname, plot=myplot)
+}
+```
+
+```{r}
+for (i in 1:length(kseq)) {
+  
+  myplot <- filter(sim_summary, !(truth %in% diagvals), k==kseq[i]) |>
+  ggplot(aes(x=truth, y=pp, col=Setting, lty=Setting, pch=Setting)) +
+    geom_line() +
+    geom_point() +
+    facet_wrap(~ n, labeller = labeller(n = function(x) paste0("n = ", x))) +
+    theme_bw(base_size = 15) +
+    theme(legend.position = c(0.1, 0.85), legend.title=element_blank()) +
+    scale_color_grey() +
+    xlab(expression("Data-generating " * Theta[ij])) +
+    ylab("Average posterior inclusion probability")
+  print(myplot)
+
+  fname <- paste0("sim_priorsettings_banded_pp_k", kseq[i], ".pdf")
+  if (save2pdf) ggsave(fname, plot = myplot)
+}
+```
+
+
+# Star graph
+
+## Run simulations
+
+
+```{r}
+sims1 <- sims2 <- sims3 <- vector("list", length(kseq))
+names(sims1) <- names(sims2) <- names(sims3) <- names(kseq)
+diagvals <- vector("list", length(kseq))
+for (i in 1:length(kseq)) {
+  ksel <- kseq[i]  # number of variables
+  cat("Simulations for k =", ksel)
+  
+  # Data-generating precision matrix
+  Theta <- diag(ksel)
+  Theta[1, 2:ksel] <- 0.5
+  Theta[2:ksel, 1] <- 0.5
+  diag(Theta) <- rowSums(abs(Theta)) + 0.01
+  Sigma = solve(Theta)
+  diagvals[[i]] <- unique(diag(Theta))
+
+  # Set prior distribution under each setting
+  pars_sel <- filter(priorpars, setting == "Setting 1", k == ksel)
+  priorModel <- modelbinomprior(pars_sel$edge_prob)
+  priorDiag <- exponentialprior(lambda = pars_sel$lambda)
+  priorCoef <- normalidprior(pars_sel$var.slab)
+  sims1[[i]] <- run_simulations(n=nseq, nsims=nsims, Theta=Theta, Sigma=solve(Theta), priorCoef=priorCoef, priorDiag=priorDiag, priorModel=priorModel, scale=FALSE) 
+
+  pars_sel <- filter(priorpars, setting == "Setting 2", k == ksel)
+  priorModel <- modelbinomprior(pars_sel$edge_prob)
+  priorDiag <- exponentialprior(lambda = pars_sel$lambda)
+  priorCoef <- normalidprior(pars_sel$var.slab)
+  sims2[[i]] <- run_simulations(n=nseq, nsims=nsims, Theta=Theta, Sigma=solve(Theta), priorCoef=priorCoef, priorDiag=priorDiag, priorModel=priorModel, scale=FALSE) 
+
+  pars_sel <- filter(priorpars, setting == "Setting 3", k == ksel)
+  priorModel <- modelbinomprior(pars_sel$edge_prob)
+  priorDiag <- exponentialprior(lambda = pars_sel$lambda)
+  priorCoef <- normalidprior(pars_sel$var.slab)
+  sims3[[i]] <- run_simulations(n=nseq, nsims=nsims, Theta=Theta, Sigma=solve(Theta), priorCoef=priorCoef, priorDiag=priorDiag, priorModel=priorModel, scale=FALSE) 
+
+  cat("\n")
+}
+diagvals <- unique(unlist(diagvals))
+```
+
+
+We summarize the results across all simulations. For each prior parameter setting and $k= \mbox{dim}(\Theta)$, and each value of the data-generating $\Theta_{ij}$, we report the mean squared estimation error in the Bayesian model averaging estimate $E(\Theta_{ij} \mid y)$, the average marginal posterior edge inclusion probability $P(\Theta_{ij} \neq 0 \mid y)$, and the average BMA estimate.
+
+```{r, warning=FALSE}
+sim_summary <- summarize_simulations(kseq=kseq, sims1=sims1, sims2=sims2, sims3=sims3)
+sim_summary
+```
+
+
+## Plots
+
+We first display the root mean square error, and subsequently the average posterior inclusion probability.
+
+```{r}
+for (i in 1:length(kseq)) {
+  
+  myplot <- filter(sim_summary, !(truth %in% diagvals), k==kseq[i]) |>
+  ggplot(aes(x=truth, y=root_mse, col=Setting, lty=Setting, pch=Setting)) +
+    geom_line() +
+    geom_point() +
+    facet_wrap(~ n, labeller = labeller(n = function(x) paste0("n = ", x))) +
+    theme_bw(base_size = 15) +
+    theme(legend.position = c(0.1, 0.85), legend.title=element_blank()) +
+    scale_color_grey() +
+    xlab(expression("Data-generating " * Theta[ij])) +
+    ylab("Root mean squared error")
+  print(myplot)
+
+  fname <- paste0("sim_priorsettings_star_rootmse_nodiag_k", kseq[i], ".pdf")
+  if (save2pdf) ggsave(fname, plot = myplot)
+}
+```
+
+```{r}
+for (i in 1:length(kseq)) {
+  
+  myplot <- filter(sim_summary, k==kseq[i]) |>
+  ggplot(aes(x=truth, y=root_mse, col=Setting, lty=Setting, pch=Setting)) +
+    geom_line() +
+    geom_point() +
+    facet_wrap(~ n, labeller = labeller(n = function(x) paste0("n = ", x))) +
+    theme_bw(base_size = 15) +
+    theme(legend.position = c(0.1, 0.85), legend.title=element_blank()) +
+    scale_color_grey() +
+    xlab(expression("Data-generating " * Theta[ij])) +
+    ylab("Root mean squared error")
+  print(myplot)
+
+  fname <- paste0("sim_priorsettings_star_rootmse_k", kseq[i], ".pdf")
+  if (save2pdf) ggsave(fname, plot = myplot)
+}
+```
+
+```{r}
+for (i in 1:length(kseq)) {
+  
+  myplot <- filter(sim_summary, !(truth %in% diagvals), k==kseq[i]) |>
+  ggplot(aes(x=truth, y=pp, col=Setting, lty=Setting, pch=Setting)) +
+    geom_line() +
+    geom_point() +
+    facet_wrap(~ n, labeller = labeller(n = function(x) paste0("n = ", x))) +
+    theme_bw(base_size = 15) +
+    theme(legend.position = c(0.1, 0.85), legend.title=element_blank()) +
+    scale_color_grey() +
+    xlab(expression("Data-generating " * Theta[ij])) +
+    ylab("Average posterior inclusion probability")
+  print(myplot)
+
+  fname <- paste0("sim_priorsettings_star_pp_k", kseq[i], ".pdf")
+  if (save2pdf) ggsave(fname, plot = myplot)
+}
+```
+
+
+
+# Erdos-Renyi graph
+
+## Run simulations
+
+
+```{r}
+sims1 <- sims2 <- sims3 <- vector("list", length(kseq))
+names(sims1) <- names(sims2) <- names(sims3) <- names(kseq)
+diagvals <- vector("list", length(kseq))
+for (i in 1:length(kseq)) {
+  ksel <- kseq[i]  # number of variables
+  cat("Simulations for k =", ksel)
+  
+  # Data-generating precision matrix
+  y <- matrix(nrow=0, ncol=ksel)
+  sample <- modelSelectionGGM(y, priorCoef=normalidprior(1), priorModel=modelbinomprior(0.1), priorDiag=exponentialprior(1), niter=500, verbose=FALSE)
+  Theta <- diag(ksel)
+  thetavals <- sample$postSample[nrow(sample$postSample),]
+  for (j in 1:ncol(sample$indexes)) {
+    Theta[sample$indexes['row',j], sample$indexes['column',j]] <- thetavals[j]
+    Theta[sample$indexes['column',j], sample$indexes['row',j]] <- thetavals[j]
+  }
+  Sigma <- solve(Theta)
+  diagvals[[i]] <- unique(diag(Theta))
+
+  # Set prior distribution under each setting
+  pars_sel <- filter(priorpars, setting == "Setting 1", k == ksel)
+  priorModel <- modelbinomprior(pars_sel$edge_prob)
+  priorDiag <- exponentialprior(lambda = pars_sel$lambda)
+  priorCoef <- normalidprior(pars_sel$var.slab)
+  sims1[[i]] <- run_simulations(n=nseq, nsims=nsims, Theta=Theta, Sigma=solve(Theta), priorCoef=priorCoef, priorDiag=priorDiag, priorModel=priorModel) 
+
+  pars_sel <- filter(priorpars, setting == "Setting 2", k == ksel)
+  priorModel <- modelbinomprior(pars_sel$edge_prob)
+  priorDiag <- exponentialprior(lambda = pars_sel$lambda)
+  priorCoef <- normalidprior(pars_sel$var.slab)
+  sims2[[i]] <- run_simulations(n=nseq, nsims=nsims, Theta=Theta, Sigma=solve(Theta), priorCoef=priorCoef, priorDiag=priorDiag, priorModel=priorModel) 
+
+  pars_sel <- filter(priorpars, setting == "Setting 3", k == ksel)
+  priorModel <- modelbinomprior(pars_sel$edge_prob)
+  priorDiag <- exponentialprior(lambda = pars_sel$lambda)
+  priorCoef <- normalidprior(pars_sel$var.slab)
+  sims3[[i]] <- run_simulations(n=nseq, nsims=nsims, Theta=Theta, Sigma=solve(Theta), priorCoef=priorCoef, priorDiag=priorDiag, priorModel=priorModel) 
+
+  cat("\n")
+}
+diagvals <- unique(unlist(diagvals))
+```
+
+
+We summarize the results across all simulations. For each prior parameter setting and $k= \mbox{dim}(\Theta)$, and each value of the data-generating $\Theta_{ij}$, we report the mean squared estimation error in the Bayesian model averaging estimate $E(\Theta_{ij} \mid y)$, the average marginal posterior edge inclusion probability $P(\Theta_{ij} \neq 0 \mid y)$, and the average BMA estimate.
+
+```{r, warning=FALSE}
+sim_summary <- summarize_simulations(kseq=kseq, sims1=sims1, sims2=sims2, sims3=sims3) |>
+  filter(!(truth %in% diagvals))
+
+# To facilite plotting, group data-generating truth into bins
+# (small bin around 0, to assess post prob to true zeroes)
+breaks <- c(min(sim_summary$truth)-0.001,-2,-1,-0.01,0.01,1,2,max(sim_summary$truth)+0.001)
+labels <- round((breaks[-1] + breaks[-length(breaks)])/2, 2)
+sim_summary <- transform(sim_summary, truth = cut(truth, breaks=breaks, labels=labels)) |>
+  group_by(Setting, k, n, truth) |>
+  summarize(root_mse = mean(root_mse), pp = mean(pp), mean_estimate=mean(mean_estimate), .groups = "drop") |>
+  transform(truth = as.numeric(as.character(truth)))
+```
+
+
+## Plots
+
+We first display the root mean square error, and subsequently the average posterior inclusion probability.
+
+```{r}
+for (i in 1:length(kseq)) {
+  
+  myplot <- filter(sim_summary, !(truth %in% diagvals), k==kseq[i]) |>
+  ggplot(aes(x=truth, y=root_mse, col=Setting, lty=Setting, pch=Setting)) +
+    geom_line() +
+    geom_point() +
+    facet_wrap(~ n, labeller = labeller(n = function(x) paste0("n = ", x))) +
+    theme_bw(base_size = 15) +
+    theme(legend.position = c(0.1, 0.85), legend.title=element_blank()) +
+    scale_color_grey() +
+    xlab(expression("Data-generating " * Theta[ij])) +
+    ylab("Root mean squared error")
+  print(myplot)
+
+  fname <- paste0("sim_priorsettings_erdosrenyi_rootmse_nodiag_k", kseq[i], ".pdf")
+  if (save2pdf) ggsave(fname, plot = myplot)
+}
+```
+
+```{r}
+for (i in 1:length(kseq)) {
+  
+  myplot <- filter(sim_summary, k==kseq[i]) |>
+  ggplot(aes(x=truth, y=root_mse, col=Setting, lty=Setting, pch=Setting)) +
+    geom_line() +
+    geom_point() +
+    facet_wrap(~ n, labeller = labeller(n = function(x) paste0("n = ", x))) +
+    theme_bw(base_size = 15) +
+    theme(legend.position = c(0.1, 0.85), legend.title=element_blank()) +
+    scale_color_grey() +
+    xlab(expression("Data-generating " * Theta[ij])) +
+    ylab("Root mean squared error")
+  print(myplot)
+
+  fname <- paste0("sim_priorsettings_erdosrenyi_rootmse_k", kseq[i], ".pdf")
+  if (save2pdf) ggsave(fname, plot = myplot)
+}
+```
+
+```{r}
+for (i in 1:length(kseq)) {
+  
+  myplot <- filter(sim_summary, !(truth %in% diagvals), k==kseq[i]) |>
+  ggplot(aes(x=truth, y=pp, col=Setting, lty=Setting, pch=Setting)) +
+    geom_line() +
+    geom_point() +
+    facet_wrap(~ n, labeller = labeller(n = function(x) paste0("n = ", x))) +
+    theme_bw(base_size = 15) +
+    theme(legend.position = c(0.9, 0.15), legend.title=element_blank()) +
+    scale_color_grey() +
+    xlab(expression("Data-generating " * Theta[ij])) +
+    ylab("Average posterior inclusion probability")
+  print(myplot)
+
+  fname <- paste0("sim_priorsettings_erdosrenyi_pp_k", kseq[i], ".pdf")
+  if (save2pdf) ggsave(fname, plot = myplot)
+}
+```
+
+
+
+
+# Block-diagonal graph
+
+## Run simulations
+
+
+```{r}
+sims1 <- sims2 <- sims3 <- vector("list", length(kseq))
+names(sims1) <- names(sims2) <- names(sims3) <- names(kseq)
+diagvals <- vector("list", length(kseq))
+for (i in 1:length(kseq)) {
+  ksel <- kseq[i]  # number of variables
+  cat("Simulations for k =", ksel)
+  
+  # Data-generating precision matrix
+  block_size <- 5
+  num_blocks <- ksel / block_size
+  B <- matrix(0.5, nrow = block_size, ncol = block_size)
+  diag(B) <- 1
+  Theta <- kronecker(diag(num_blocks), B)
+  Sigma <- solve(Theta)
+  diagvals[[i]] <- unique(diag(Theta))
+
+  # Set prior distribution under each setting
+  pars_sel <- filter(priorpars, setting == "Setting 1", k == ksel)
+  priorModel <- modelbinomprior(pars_sel$edge_prob)
+  priorDiag <- exponentialprior(lambda = pars_sel$lambda)
+  priorCoef <- normalidprior(pars_sel$var.slab)
+  sims1[[i]] <- run_simulations(n=nseq, nsims=nsims, Theta=Theta, Sigma=solve(Theta), priorCoef=priorCoef, priorDiag=priorDiag, priorModel=priorModel) 
+
+  pars_sel <- filter(priorpars, setting == "Setting 2", k == ksel)
+  priorModel <- modelbinomprior(pars_sel$edge_prob)
+  priorDiag <- exponentialprior(lambda = pars_sel$lambda)
+  priorCoef <- normalidprior(pars_sel$var.slab)
+  sims2[[i]] <- run_simulations(n=nseq, nsims=nsims, Theta=Theta, Sigma=solve(Theta), priorCoef=priorCoef, priorDiag=priorDiag, priorModel=priorModel) 
+
+  pars_sel <- filter(priorpars, setting == "Setting 3", k == ksel)
+  priorModel <- modelbinomprior(pars_sel$edge_prob)
+  priorDiag <- exponentialprior(lambda = pars_sel$lambda)
+  priorCoef <- normalidprior(pars_sel$var.slab)
+  sims3[[i]] <- run_simulations(n=nseq, nsims=nsims, Theta=Theta, Sigma=solve(Theta), priorCoef=priorCoef, priorDiag=priorDiag, priorModel=priorModel) 
+
+  cat("\n")
+}
+diagvals <- unique(unlist(diagvals))
+```
+
+
+We summarize the results across all simulations. For each prior parameter setting and $k= \mbox{dim}(\Theta)$, and each value of the data-generating $\Theta_{ij}$, we report the mean squared estimation error in the Bayesian model averaging estimate $E(\Theta_{ij} \mid y)$, the average marginal posterior edge inclusion probability $P(\Theta_{ij} \neq 0 \mid y)$, and the average BMA estimate.
+
+```{r, warning=FALSE}
+sim_summary <- summarize_simulations(kseq=kseq, sims1=sims1, sims2=sims2, sims3=sims3)
+sim_summary
+```
+
+
+## Plots
+
+We first display the root mean square error, and subsequently the average posterior inclusion probability.
+
+```{r}
+for (i in 1:length(kseq)) {
+  
+  myplot <- filter(sim_summary, !(truth %in% diagvals), k==kseq[i]) |>
+  ggplot(aes(x=truth, y=root_mse, col=Setting, lty=Setting, pch=Setting)) +
+    geom_line() +
+    geom_point() +
+    facet_wrap(~ n, labeller = labeller(n = function(x) paste0("n = ", x))) +
+    theme_bw(base_size = 15) +
+    theme(legend.position = c(0.1, 0.85), legend.title=element_blank()) +
+    scale_color_grey() +
+    xlab(expression("Data-generating " * Theta[ij])) +
+    ylab("Root mean squared error")
+  print(myplot)
+
+  fname <- paste0("sim_priorsettings_block_rootmse_nodiag_k", kseq[i], ".pdf")
+  if (save2pdf) ggsave(fname, plot = myplot)
+}
+```
+
+```{r}
+for (i in 1:length(kseq)) {
+  
+  myplot <- filter(sim_summary, k==kseq[i]) |>
+  ggplot(aes(x=truth, y=root_mse, col=Setting, lty=Setting, pch=Setting)) +
+    geom_line() +
+    geom_point() +
+    facet_wrap(~ n, labeller = labeller(n = function(x) paste0("n = ", x))) +
+    theme_bw(base_size = 15) +
+    theme(legend.position = c(0.1, 0.85), legend.title=element_blank()) +
+    scale_color_grey() +
+    xlab(expression("Data-generating " * Theta[ij])) +
+    ylab("Root mean squared error")
+  print(myplot)
+
+  fname <- paste0("sim_priorsettings_block_rootmse_k", kseq[i], ".pdf")
+  if (save2pdf) ggsave(fname, plot = myplot)
+}
+```
+
+```{r}
+for (i in 1:length(kseq)) {
+  
+  myplot <- filter(sim_summary, !(truth %in% diagvals), k==kseq[i]) |>
+  ggplot(aes(x=truth, y=pp, col=Setting, lty=Setting, pch=Setting)) +
+    geom_line() +
+    geom_point() +
+    facet_wrap(~ n, labeller = labeller(n = function(x) paste0("n = ", x))) +
+    theme_bw(base_size = 15) +
+    theme(legend.position = c(0.1, 0.85), legend.title=element_blank()) +
+    scale_color_grey() +
+    xlab(expression("Data-generating " * Theta[ij])) +
+    ylab("Average posterior inclusion probability")
+  print(myplot)
+
+  fname <- paste0("sim_priorsettings_block_pp_k", kseq[i], ".pdf")
+  if (save2pdf) ggsave(fname, plot = myplot)
+}
+```
+

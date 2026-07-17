@@ -1,0 +1,398 @@
+---
+title: "GGM Simulation. Transfer learning"
+output: 
+  html_document:
+    toc: true
+    theme: united
+---
+
+
+```{r, warning=FALSE, message=FALSE}
+library(modelSelection)
+library(mvtnorm)
+library(tidyverse)
+library(lamW)      # Lambert's W_q function
+set.seed(20260710) # for reproducibility
+save2pdf <- TRUE
+nsims <- 20 # number of simulations
+nseq <- c(10, 20, 100) # sample sizes
+kseq <- c(20, 50) # problem dimensions
+names(kseq) <- paste('k=', kseq, sep='')
+```
+
+# Set default prior parameters
+
+We consider a discrete spike-and-slab prior on the precision matrix, with a Beta-Binomial(1,2) prior. That is, the edge inclusion indicators are $Z_{ij} \sim \mbox{Bern}(\eta)$ with $\eta \sim \mbox{Beta}(5,95)$, with prior mean $E(\eta)= 5/100$.
+The prior on diagonal elements is $\theta_{ii} \sim \mbox{Exp}(\lambda/2)$, with expectation $\mu= 2/\lambda$, and the prior on off-diagonal elements is $\theta_{ij} \sim N(0, \sigma^2)$. A natural default is $\sigma^2 =1$. If all the columns in the observed dataset are standardized to zero sample mean and unit sample variance, this default is related to Zellner's unit information prior in regression.
+Out of the following three settings, we will focus only on Settings 1 and 3.
+
+1. A default $\lambda=1$, and $\sigma^2=1$.
+
+2. A default $\lambda=1$, with $\sigma^2$ specified such that $P(\Theta \succ 0) = 0.95$. This guarantees that the total variation distance between the priors before and after positive-definiteness truncation is small, and hence that the prior is interpretable.
+
+3. Set $\lambda$ such that $P(\Theta_{ii} \succ 0 \mid Z) \geq 1 - \alpha$ for every edge configuration $Z$ and taking $\alpha=0.1$, and $\sigma^2=1$.
+
+
+```{r}
+edge_prob_succ= 5 # prior number of successes 
+edge_prob_fail= 95 # prior number of failures
+mu = 9.5       # mean of off-diagonal 
+lambda= 2/mu
+```
+
+We next obtain the value of $\lambda$ for Setting 3.
+
+```{r}
+sd.slab <- 1
+alpha <- 0.1
+x <- - alpha^2 /(32 * exp(2) * kseq^2)
+l <- lambertWm1(x) # q = -1 branch of Lambert's W_q function
+mu <- (2 * sd.slab * kseq^(3/2) / alpha) * sqrt(-l)
+lambda2 <- 2/mu
+names(lambda2) <- names(kseq)
+lambda2
+```
+
+We store the prior parameter values obtained for each setting and $k = \mbox{dim}(\Theta)$.
+
+```{r}
+priorpars <- expand.grid(setting=c('Setting 1', 'Setting 3'), k=kseq)
+priorpars$edge_prob_succ <- edge_prob_succ
+priorpars$edge_prob_fail <- edge_prob_fail
+priorpars$lambda <- priorpars$var.slab <- NA
+for (i in 1:nrow(priorpars)) {
+  if (priorpars$setting[i] == 'Setting 1') {
+    priorpars$lambda[i] <- 1
+    priorpars$var.slab[i] <- 1
+  } else if (priorpars$setting[i] == 'Setting 3') {
+    priorpars$lambda[i] <- lambda2[paste('k=', priorpars$k[i], sep='')]
+    priorpars$var.slab[i] <- 1
+  }
+}
+priorpars
+```
+
+
+# Prior distribution on model size
+
+We first plot the prior on the model size before truncation.
+
+```{r}
+dbetabin <- function(x, n, alpha, beta) {
+  ans <- lchoose(n, x) + lgamma(x + alpha) + lgamma(n - x + beta) - lgamma(n + alpha + beta) - lgamma(alpha) - lgamma(beta) + lgamma(alpha + beta)
+  exp(ans)
+}
+```
+
+```{r, out.width="50%"}
+for (i in 1:length(kseq)) {
+  maxedges <- (kseq[i] * (kseq[i] - 1) / 2)
+  plot(0:maxedges, dbetabin(0:maxedges, n=maxedges, edge_prob_succ, edge_prob_fail), type='l', ylab='Prior (before trunc)', xlab="number of edges", main=paste0('k=',kseq[i]))
+  abline(v= maxedges * edge_prob_succ / (edge_prob_succ + edge_prob_fail))
+}
+```
+
+Now, the prior on the model size after the +def truncation.
+
+```{r}
+niter <- 50000
+priorModel <- modelbbprior(edge_prob_succ, edge_prob_fail)
+priorCoef <- normalidprior(1)
+priorDiag <- exponentialprior(1)
+simprior <- vector("list", length(kseq))
+for (i in 1:length(kseq)) {
+  y <- matrix(nrow=0, ncol=kseq[i])
+  simprior[[i]] <- modelSelectionGGM(y, priorCoef=priorCoef, priorDiag=priorDiag, priorModel=priorModel, niter=niter, verbose=TRUE)
+}
+```
+
+```{r}
+total_edges <- vector("list", length(kseq))
+for (i in 1:length(kseq)) {
+  diagentry <- simprior[[i]]$indexes[1,] == simprior[[i]]$indexes[2,]
+  total_edges[[i]] <- rowSums(as.matrix(simprior[[i]]$postSample[,!diagentry] != 0))
+}
+
+nedges <- data.frame(number_edges = unlist(total_edges), k= rep(kseq, sapply(total_edges, length)))
+```
+
+```{r, message=FALSE}
+ggplot(nedges, aes(x=number_edges)) +
+  geom_histogram(aes(y = after_stat(density)), position="identity") +
+  facet_wrap(~ k, labeller = labeller(k = function(x) paste0("k = ", x))) +
+  labs(x = "Number of edges", y = "Prior probability") +
+  theme_bw(base_size = 18) +
+  scale_color_grey()
+```
+
+
+
+# Function to run simulations
+
+We create a function that simulates data from a multivariate Gaussian, fits a Bayesian Gaussian graphical model model under a discrete spike-and-slab prior, and record the mean squared estimation error, the average estimate of each $\theta_{ij}$ entry, and the average posterior probability $P(\theta_{ij} \neq 0 \mid y)$.
+
+
+```{r}
+run_simulations <- function(n, nsims, Theta, Sigma=solve(Theta), priorCoef, priorDiag, priorModel, scale=TRUE) {
+  posterior_coef = posterior_nbedges = vector("list", nsims)
+  for (i in 1:nsims) {
+    set.seed(i)  #for reproducibility
+
+    ansi = ansi_nbedges = vector("list", length(n))
+    for (j in 1:length(n)) {
+    
+      # Simulate data
+      samplesize <- n[j]
+      y = rmvnorm(samplesize, sigma= Sigma)
+      sy = apply(y, 2, 'sd')
+
+      # Fit models   
+      fit = modelSelectionGGM(y=y, priorCoef=priorCoef, priorDiag=priorDiag, priorModel=priorModel, center=scale, scale=scale, verbose=FALSE)
+      
+      # Posterior distribution on the number of edges
+      diagentry <- fit$indexes[1,] == fit$indexes[2,]
+      ansi_nbedges[[j]] <- data.frame(number_edges = rowSums(as.matrix(fit$postSample[,!diagentry] != 0)), n = samplesize)
+
+      # Extract BMA parameter estimates and posterior edge inclusion probabilities
+      b= data.frame(coef(fit)) |>
+        select(row, column, estimate, margpp)
+
+      # Convert to original scale
+      scaling = 1 / (sy[b$row] * sy[b$column])
+      b = transform(b, estimate= estimate * scaling)
+
+      # Add data-generating truth
+      if (i==1) {
+        truth = double(nrow(b))
+        for (l in 1:nrow(b)) truth[l] = Theta[b$row[l], b$column[l]]
+      }
+      b$truth = truth
+  
+      # Record MSE, average posterior inclusion probability and average point estimate
+      ansi[[j]] = group_by(b, truth) |>
+                 summarize(mse = mean((truth - estimate)^2), pp = mean(margpp), mean_estimate = mean(estimate), count = n()) |>
+                 cbind(simid = i, n = samplesize)
+
+      cat('.')
+
+    }
+    
+    posterior_coef[[i]] <- do.call(rbind, ansi)
+    posterior_nbedges[[i]] <- do.call(rbind, ansi_nbedges)
+  }
+  ans = list(posterior_coef=posterior_coef, posterior_nbedges=posterior_nbedges)
+  return(ans)
+}
+```
+
+
+
+# Erdos-Renyi graph
+
+## Run simulations
+
+
+```{r}
+true_edge_prob <- edge_prob_succ / (edge_prob_succ + edge_prob_fail)
+sims1 <- sims3 <- Theta_truth <- vector("list", length(kseq))
+names(sims1) <- names(sims3) <- names(kseq)
+diagvals <- vector("list", length(kseq))
+for (i in 1:length(kseq)) {
+  ksel <- kseq[i]  # number of variables
+  cat("Simulations for k =", ksel)
+  
+  # Data-generating precision matrix
+  y <- matrix(nrow=0, ncol=ksel)
+  sample <- modelSelectionGGM(y, priorCoef=normalidprior(1), priorModel=modelbinomprior(true_edge_prob), priorDiag=exponentialprior(1), niter=5000, verbose=FALSE)  # simulate from prior
+  
+  diagentry <- sample$indexes[1,] == sample$indexes[2,]
+  sample_edges <- rowSums(as.matrix(sample$postSample[,!diagentry] != 0))
+  diff_edges <- abs(sample_edges - true_edge_prob * ksel * (ksel - 1) / 2)
+  sel <- rev(which(diff_edges == min(diff_edges)))[1]  # take draw closest to true edge prob
+  Theta <- diag(ksel)
+  thetavals <- sample$postSample[sel,]
+  for (j in 1:ncol(sample$indexes)) {
+    Theta[sample$indexes['row',j], sample$indexes['column',j]] <- thetavals[j]
+    Theta[sample$indexes['column',j], sample$indexes['row',j]] <- thetavals[j]
+  }
+  Sigma <- solve(Theta)
+  diagvals[[i]] <- unique(diag(Theta))
+  Theta_truth[[i]] <- Theta
+
+  # Set prior distribution under each setting
+  pars_sel <- filter(priorpars, setting == "Setting 1", k == ksel)
+  priorModel <- modelbbprior(pars_sel$edge_prob_succ, pars_sel$edge_prob_fail)
+  priorDiag <- exponentialprior(lambda = pars_sel$lambda)
+  priorCoef <- normalidprior(pars_sel$var.slab)
+  sims1[[i]] <- run_simulations(n=nseq, nsims=nsims, Theta=Theta, Sigma=solve(Theta), priorCoef=priorCoef, priorDiag=priorDiag, priorModel=priorModel) 
+
+  pars_sel <- filter(priorpars, setting == "Setting 3", k == ksel)
+  priorModel <- modelbbprior(pars_sel$edge_prob_succ, pars_sel$edge_prob_fail)
+  priorDiag <- exponentialprior(lambda = pars_sel$lambda)
+  priorCoef <- normalidprior(pars_sel$var.slab)
+  sims3[[i]] <- run_simulations(n=nseq, nsims=nsims, Theta=Theta, Sigma=solve(Theta), priorCoef=priorCoef, priorDiag=priorDiag, priorModel=priorModel) 
+
+  cat("\n")
+}
+diagvals <- unique(unlist(diagvals))
+```
+
+
+We summarize the results across all simulations. For each prior parameter setting and $k= \mbox{dim}(\Theta)$, and each value of the data-generating $\Theta_{ij}$, we report the mean squared estimation error in the Bayesian model averaging estimate $E(\Theta_{ij} \mid y)$, the average marginal posterior edge inclusion probability $P(\Theta_{ij} \neq 0 \mid y)$, and the average BMA estimate.
+
+```{r}
+summarize_simulations <- function(kseq, sims1, sims2, sims3) {
+  
+  sim_summary <- vector("list", length(kseq))
+  names(sim_summary) <- names(kseq)
+
+  for (i in 1:length(kseq)) {
+
+    summary1 = do.call(rbind, sims1[[i]]) |>
+      data.frame() |>
+      group_by(n, truth) |>
+      summarize(across(mse:count, mean), .groups="drop") |>
+      transform(k = kseq[i], Setting = "Setting 1")
+
+    if (!missing(sims2)) {
+      summary2 = do.call(rbind, sims2[[i]]) |>
+        data.frame() |>
+        group_by(n, truth) |>
+        summarize(across(mse:count, mean), .groups="drop") |>
+        transform(k = kseq[i], Setting = "Setting 2")
+    } else {
+      summary2 = NULL
+    }
+    
+    if (!missing(sims3)) {
+      summary3 = do.call(rbind, sims3[[i]]) |>
+        data.frame() |>
+        group_by(n, truth) |>
+        summarize(across(mse:count, mean), .groups="drop") |>
+        transform(k = kseq[i], Setting = "Setting 3")
+    } else {
+      summary3 = NULL
+    }
+  
+    sim_summary[[i]] <- rbind(summary1, summary2, summary3)
+
+  }
+
+  sim_summary <- do.call(rbind, sim_summary) |>
+    transform(root_mse = round(sqrt(mse),3), pp = round(pp,3), mean_estimate = round(mean_estimate, 4)) |>
+    select(-mse) |>
+    select(Setting, k, root_mse, everything())
+
+  rownames(sim_summary) <- NULL
+
+  return(sim_summary)
+}
+
+```
+
+
+We summarize the results across all simulations. For each prior parameter setting and $k= \mbox{dim}(\Theta)$, and each value of the data-generating $\Theta_{ij}$, we report the mean squared estimation error in the Bayesian model averaging estimate $E(\Theta_{ij} \mid y)$, the average marginal posterior edge inclusion probability $P(\Theta_{ij} \neq 0 \mid y)$, and the average BMA estimate.
+
+```{r, warning=FALSE}
+sims1_coef <- lapply(sims1, function(z) z$posterior_coef)
+sims3_coef <- lapply(sims3, function(z) z$posterior_coef)
+sim_summary <- summarize_simulations(kseq=kseq, sims1=sims1_coef, sims3=sims3_coef) |>
+  filter(!(truth %in% diagvals))
+
+rmse_total <- mutate(sim_summary, weighted_mse = root_mse^2 * count) |>
+  group_by(Setting, k, n) |>
+  summarize(rmse_total = sqrt(sum(weighted_mse)))
+
+# To facilite plotting, group data-generating truth into bins
+# (small bin around 0, to assess post prob to true zeroes)
+breaks <- c(min(sim_summary$truth)-0.001,-2,-1,-0.01,0.01,1,2,max(sim_summary$truth)+0.001)
+labels <- round((breaks[-1] + breaks[-length(breaks)])/2, 2)
+sim_summary <- transform(sim_summary, truth = cut(truth, breaks=breaks, labels=labels)) |>
+  group_by(Setting, k, n, truth) |>
+  summarize(root_mse = mean(root_mse), pp = mean(pp), mean_estimate=mean(mean_estimate), .groups = "drop") |>
+  transform(truth = as.numeric(as.character(truth)))
+```
+
+
+## Plots
+
+Average posterior on the model size.
+
+```{r}
+sims1_nbedges <- lapply(sims1, function(z) z$posterior_nbedges)
+sims1_nbedges <- lapply(sims1_nbedges, function(z) do.call(rbind, z))
+k_column <- rep(names(sims1_nbedges), sapply(sims1_nbedges, nrow))
+sims1_nbedges <- do.call(rbind, sims1_nbedges) |>
+  mutate(k = k_column)
+
+sims3_nbedges <- lapply(sims3, function(z) z$posterior_nbedges)
+sims3_nbedges <- lapply(sims3_nbedges, function(z) do.call(rbind, z))
+k_column <- rep(names(sims3_nbedges), sapply(sims3_nbedges, nrow))
+sims3_nbedges <- do.call(rbind, sims3_nbedges) |>
+  mutate(k = k_column)
+
+setting_column <- rep(c('Setting 1','Setting 3'), c(nrow(sims1_nbedges), nrow(sims3_nbedges)))
+sims_nbedges <- rbind(sims1_nbedges, sims3_nbedges) |>
+  mutate(Setting = setting_column)
+rownames(sims_nbedges) <- NULL
+```
+
+```{r, message=FALSE}
+vline_data <- data.frame(k=names(kseq), true_nbedges= sapply(Theta_truth, function(z) sum(z[upper.tri(z)] != 0)))
+
+ggplot(sims_nbedges, aes(x=number_edges, col=Setting)) +
+  geom_histogram(aes(y = after_stat(density)), fill=NA, position="identity") +
+  geom_vline(data = vline_data, aes(xintercept = true_nbedges)) +
+  facet_grid(rows= vars(n), cols= vars(k), scale="free_x", labeller=labeller(n = function(x) paste0("n = ", x))) +
+  theme_bw(base_size = 18) +
+  theme(legend.position = c(0.8, 0.88), legend.title = element_blank()) +
+  scale_color_grey() +
+  xlab("Number of edges") +
+  ylab("Posterior probability")
+
+fname <- "sim_transferlearn_modelsize.pdf"
+if (save2pdf) ggsave(fname)
+```
+
+We show the average posterior marginal inclusion probability $P(\Theta_{ij} \neq 0 \mid y)$ for prior settings 1 and 3, separately for each $(k,n)$ combination.
+
+```{r, message=FALSE}
+filter(sim_summary, !(truth %in% diagvals)) |>
+ggplot(aes(x=truth, y=pp, col=Setting, lty=Setting, pch=Setting)) +
+  geom_line() +
+  geom_point() +
+  facet_grid(rows=vars(n), cols=vars(k), 
+             labeller = labeller(n = function(x) paste0("n = ", x), k = function(x) paste0("k = ", x))) +
+  theme_bw(base_size = 15) +
+  theme(legend.position = c(0.9, 0.15), legend.title=element_blank()) +
+  scale_color_grey() +
+  xlab(expression("Data-generating " * Theta[ij])) +
+  ylab("Average posterior inclusion probability")
+
+fname <- "sim_transferlearn_pp.pdf"
+if (save2pdf) ggsave(fname)
+```
+
+
+
+We display the root mean square error, and subsequently the average posterior inclusion probability.
+
+```{r, message=FALSE}
+filter(sim_summary, !(truth %in% diagvals)) |>
+ggplot(aes(x=truth, y=root_mse, col=Setting, lty=Setting, pch=Setting)) +
+  geom_line() +
+  geom_point() +
+  facet_grid(rows=vars(n), cols=vars(k), 
+             labeller = labeller(n = function(x) paste0("n = ", x), k = function(x) paste0("k = ", x))) +
+  theme_bw(base_size = 15) +
+  theme(legend.position = c(0.1, 0.1), legend.title=element_blank()) +
+  scale_color_grey() +
+  xlab(expression("Data-generating " * Theta[ij])) +
+  ylab("Root mean squared error")
+
+fname <- "sim_transferlearn_rootmse_nodiag.pdf"
+if (save2pdf) ggsave(fname)
+```
+
+
+
