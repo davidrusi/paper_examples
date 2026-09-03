@@ -3,7 +3,7 @@ library(tidyverse)
 library(modelSelection)
 library(hgu133plus2.db)
 library(xtable)
-source("routines.R")
+#source("routines.R")
 priorCoef= momprior()
 #priorCoef= zellnerprior()  #uncomment this line for Zellner prior results
 
@@ -84,6 +84,25 @@ ggplot(assoc, aes(x=inshort, y=r)) +
     labs(x= "Found in mouse study", y= "Correlation with TGFB") +
     theme(axis.text.x = element_text(size = 16), axis.title.x = element_text(size = 16), axis.text.y = element_text(size = 16), axis.title.y = element_text(size = 16))
 
+
+
+## Average posterior inclusion probability under a Beta-Binomial
+## comparing genes inside/outside mouse list
+group_by(assoc, inshort) |>
+  summarize(margpp.bb= mean(margpp))
+
+
+## Average posterior inclusion probability under a mean-field approximation
+## comparing genes inside/outside mouse list
+
+library(varbvs)
+fit_vb= varbvs(X= as.matrix(x), Z=NULL, y=y, family= "gaussian", logodds= 0)
+
+assoc_vb= data.frame(inshort, margpp=fit_vb$pip) |>
+  transform(inshort= case_match(as.character(inshort), "TRUE" ~ "Yes", "FALSE" ~ "No"))
+
+group_by(assoc_vb, inshort) |>
+  summarize(margpp.vb= mean(margpp))
 
 
 
